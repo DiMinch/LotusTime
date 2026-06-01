@@ -529,7 +529,34 @@ def solve():
             if key in room_use_vars:
                 model.Add(var <= room_use_vars[key])
 
-        model.Minimize(sum(room_use_vars.values()))
+        # Preference: Pack classes into the earliest slots of morning/afternoon/evening
+        def get_slot_period_penalty(ts):
+            try:
+                hour = int(ts['start_time'].split(':')[0])
+                minute = int(ts['start_time'].split(':')[1])
+                total_minutes = hour * 60 + minute
+                if hour < 12: # Morning (starts at 07:00 / 420 mins)
+                    return max(0, (total_minutes - 420) // 45)
+                elif 12 <= hour < 18: # Afternoon (starts at 13:30 / 810 mins)
+                    return max(0, (total_minutes - 810) // 45)
+                else: # Evening (starts at 18:00 / 1080 mins)
+                    return max(0, (total_minutes - 1080) // 45)
+            except Exception:
+                return 0
+
+        objective_terms = []
+        # Primary objective: minimize teacher room switches (weight = 100)
+        for var in room_use_vars.values():
+            objective_terms.append(100 * var)
+
+        # Secondary objective: minimize delay penalty (weight = 1)
+        for (cid, s, tsid, rid), var in session_vars.items():
+            ts = next(x for x in time_slots if x['id'] == tsid)
+            penalty = get_slot_period_penalty(ts)
+            if penalty > 0:
+                objective_terms.append(penalty * var)
+
+        model.Minimize(sum(objective_terms))
 
         # 3. Solve
         solver = cp_model.CpSolver()
