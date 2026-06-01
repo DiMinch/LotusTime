@@ -24,7 +24,7 @@ const SEGMENT_ROLES = [
 
 const EMPTY_FORM = {
   code: '', class_type: 'regular', level: '', student_count: '',
-  sessions_per_week: 2, duration_minutes: 90, requires_ta: false, notes: '',
+  sessions_per_week: 2, duration_minutes: 90, notes: '',
   segments: null, allowed_persons: [], allow_same_day: false
 }
 
@@ -55,7 +55,7 @@ export default function ClassesPage() {
       code: c.code, class_type: c.class_type, level: c.level || '',
       student_count: c.student_count || '',
       sessions_per_week: c.sessions_per_week, duration_minutes: c.duration_minutes,
-      requires_ta: c.requires_ta, notes: c.notes || '',
+      notes: c.notes || '',
       segments: c.segments || null,
       allowed_persons: c.permissions ? c.permissions.map(p => p.person_id) : [],
       allow_same_day: !!c.allow_same_day
@@ -190,11 +190,16 @@ export default function ClassesPage() {
                 <td>{c.duration_minutes} phút</td>
                 <td>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    {c.segments && c.segments.length > 1
-                      ? <span className="chip chip-pink">{c.segments.length} phân đoạn</span>
-                      : c.requires_ta
-                        ? <span className="chip chip-pink">Cần TA</span>
-                        : <span className="chip chip-gray">Đơn giản</span>
+                    {c.segments && c.segments.length > 0
+                      ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                            <span className="chip chip-pink" style={{ fontSize: '10px' }}>{c.segments.length} phân đoạn</span>
+                            {c.segments.some(seg => seg.required_ta_capability) && (
+                              <span className="chip chip-pink" style={{ fontSize: '10px' }}>Cần TA</span>
+                            )}
+                          </div>
+                        )
+                      : <span className="chip chip-gray">Đơn giản</span>
                     }
                     {c.allow_same_day && (
                       <span className="chip chip-green" style={{ fontSize: '10px' }}>Học cùng ngày</span>
@@ -261,13 +266,7 @@ export default function ClassesPage() {
               </div>
             </div>
 
-            {/* TA checkbox */}
-            {!form.segments && (
-              <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
-                <input type="checkbox" id="requires_ta" checked={form.requires_ta} onChange={e => setForm(f => ({ ...f, requires_ta: e.target.checked }))} />
-                <label htmlFor="requires_ta" style={{ fontSize: 'var(--text-body-md-size)' }}>Lớp này cần Trợ giảng (TA)</label>
-              </div>
-            )}
+
 
             <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', marginTop: '-8px', marginBottom: 'var(--space-md)' }}>
               <input type="checkbox" id="allow_same_day" checked={form.allow_same_day} onChange={e => setForm(f => ({ ...f, allow_same_day: e.target.checked }))} />

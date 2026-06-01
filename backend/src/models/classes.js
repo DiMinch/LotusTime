@@ -32,22 +32,22 @@ module.exports = {
     return rows[0];
   },
 
-  async create({ code, class_type, level, sessions_per_week, duration_minutes, requires_ta, notes, student_count, segments, allow_same_day }) {
+  async create({ code, class_type, level, sessions_per_week, duration_minutes, notes, student_count, segments, allow_same_day }) {
     const { rows } = await db.query(
       `INSERT INTO classes (code, class_type, level, sessions_per_week, duration_minutes, requires_ta, notes, student_count, segments, allow_same_day)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
-      [code, class_type, level, sessions_per_week, duration_minutes, requires_ta, notes,
+       VALUES ($1, $2, $3, $4, $5, false, $6, $7, $8, $9) RETURNING *`,
+      [code, class_type, level, sessions_per_week, duration_minutes, notes,
        student_count || null, segments ? JSON.stringify(segments) : null, allow_same_day || false]
     );
     return rows[0];
   },
 
-  async update(id, { code, class_type, level, sessions_per_week, duration_minutes, requires_ta, notes, student_count, segments, allow_same_day }) {
+  async update(id, { code, class_type, level, sessions_per_week, duration_minutes, notes, student_count, segments, allow_same_day }) {
     const { rows } = await db.query(
       `UPDATE classes SET code=$1, class_type=$2, level=$3, sessions_per_week=$4,
-       duration_minutes=$5, requires_ta=$6, notes=$7, student_count=$8, segments=$9, allow_same_day=$10
-       WHERE id=$11 RETURNING *`,
-      [code, class_type, level, sessions_per_week, duration_minutes, requires_ta, notes,
+       duration_minutes=$5, requires_ta=false, notes=$6, student_count=$7, segments=$8, allow_same_day=$9
+       WHERE id=$10 RETURNING *`,
+      [code, class_type, level, sessions_per_week, duration_minutes, notes,
        student_count || null, segments ? JSON.stringify(segments) : null, allow_same_day || false, id]
     );
     return rows[0];
