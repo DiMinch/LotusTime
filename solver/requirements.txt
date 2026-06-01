@@ -1,0 +1,4 @@
+ortools
+Flask
+Flask-Cors
+gunicorn

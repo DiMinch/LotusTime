@@ -1,0 +1,118 @@
+/*
+  NVIDIA-inspired Design System with Lotus Center Identity
+  Reference: DESIGN.md + Lotus brand accents
+*/
+
+:root {
+  /* Colors */
+  --color-primary: #76b900;       /* NVIDIA Green - Base Action */
+  --color-primary-dark: #5a8d00;
+  
+  --color-accent: #d81b60;        /* Lotus Dark Pink - Highlights */
+  --color-accent-pale: #fce4ec;
+  
+  --color-canvas: #ffffff;
+  --color-surface: var(--bg, #ffffff);
+  --color-surface-soft: #f7f7f7;
+  --color-surface-elevated: #1a1a1a;
+  --color-surface-dark: #000000;
+  
+  --color-hairline: #cccccc;
+  --color-hairline-strong: #5e5e5e;
+  
+  --color-ink: #000000;
+  --color-body: #1a1a1a;
+  --color-mute: #757575;
+  --color-stone: #898989;
+  --color-ash: #a7a7a7;
+  --color-on-dark: #ffffff;
+  --color-on-dark-mute: rgba(255, 255, 255, 0.7);
+  --color-on-primary: #000000;
+  
+  --color-link-blue: #0046a4;
+  --color-error: #e52020;
+  --color-error-deep: #650b0b;
+  --color-warning: #df6500;
+  --color-success-deep: #3f8500;
+
+  /* Typography (Inter fallback for NVIDIA-EMEA) */
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  
+  --text-display-xl-size: 48px;
+  --text-display-xl-weight: 700;
+  --text-display-xl-line-height: 1.25;
+  
+  --text-display-lg-size: 36px;
+  --text-display-lg-weight: 700;
+  --text-display-lg-line-height: 1.25;
+  
+  --text-heading-xl-size: 24px;
+  --text-heading-xl-weight: 700;
+  --text-heading-xl-line-height: 1.25;
+  
+  --text-heading-lg-size: 22px;
+  --text-heading-lg-weight: 400;
+  --text-heading-lg-line-height: 1.75;
+  
+  --text-heading-md-size: 20px;
+  --text-heading-md-weight: 700;
+  --text-heading-md-line-height: 1.25;
+  
+  --text-heading-sm-size: 18px;
+  --text-heading-sm-weight: 700;
+  --text-heading-sm-line-height: 1.4;
+  
+  --text-card-title-size: 17px;
+  --text-card-title-weight: 700;
+  --text-card-title-line-height: 1.47;
+  
+  --text-body-md-size: 16px;
+  --text-body-md-weight: 400;
+  --text-body-md-line-height: 1.5;
+  
+  --text-body-strong-size: 16px;
+  --text-body-strong-weight: 700;
+  --text-body-strong-line-height: 1.5;
+  
+  --text-body-sm-size: 15px;
+  --text-body-sm-weight: 400;
+  --text-body-sm-line-height: 1.67;
+  
+  --text-button-md-size: 16px;
+  --text-button-md-weight: 700;
+  --text-button-md-line-height: 1.25;
+  
+  --text-button-sm-size: 14.4px;
+  --text-button-sm-weight: 700;
+  --text-button-sm-line-height: 1;
+  --text-button-sm-tracking: 0.144px;
+
+  --text-caption-md-size: 14px;
+  --text-caption-md-weight: 700;
+  --text-caption-md-line-height: 1.43;
+  
+  --text-caption-sm-size: 12px;
+  --text-caption-sm-weight: 400;
+  --text-caption-sm-line-height: 1.25;
+
+  /* Geometry & Radii */
+  --radius-none: 0px;
+  --radius-xs: 1px;
+  --radius-sm: 2px;
+  --radius-full: 9999px;
+  
+  /* Spacing Rhythm */
+  --space-xxs: 2px;
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+  --space-xxl: 32px;
+  --space-section: 64px;
+
+  /* Component Bases */
+  --shadow-none: none;
+  --shadow-soft: 0 0 5px 0 rgba(0,0,0,0.3);
+}
