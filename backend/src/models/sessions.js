@@ -4,18 +4,29 @@ module.exports = {
   async findByWeek(weekId) {
     const { rows } = await db.query(`
       SELECT s.*, c.code as class_code, c.class_type, r.name as room_name, ts.label as slot_label,
-             p.short_name as teacher_name, sa.role as assigned_role, sa.person_id,
+             -- Main teacher (lead_teacher, foreign_teacher, ta_solo)
+             (SELECT p.short_name FROM session_assignments sa JOIN persons p ON p.id = sa.person_id 
+              WHERE sa.session_id = s.id AND sa.role IN ('lead_teacher', 'foreign_teacher', 'ta_solo') LIMIT 1) as teacher_name,
+             (SELECT sa.person_id FROM session_assignments sa 
+              WHERE sa.session_id = s.id AND sa.role IN ('lead_teacher', 'foreign_teacher', 'ta_solo') LIMIT 1) as person_id,
+             (SELECT sa.role FROM session_assignments sa 
+              WHERE sa.session_id = s.id AND sa.role IN ('lead_teacher', 'foreign_teacher', 'ta_solo') LIMIT 1) as assigned_role,
+             -- Assistant / TA (ta_support, ta_kids, ta_ielts)
+             (SELECT p.short_name FROM session_assignments sa JOIN persons p ON p.id = sa.person_id 
+              WHERE sa.session_id = s.id AND sa.role IN ('ta_support', 'ta_kids', 'ta_ielts') LIMIT 1) as ta_name,
+             (SELECT sa.person_id FROM session_assignments sa 
+              WHERE sa.session_id = s.id AND sa.role IN ('ta_support', 'ta_kids', 'ta_ielts') LIMIT 1) as ta_id,
+             (SELECT sa.role FROM session_assignments sa 
+              WHERE sa.session_id = s.id AND sa.role IN ('ta_support', 'ta_kids', 'ta_ielts') LIMIT 1) as assigned_ta_role,
              COALESCE((
                SELECT array_agg(pc.capability)
                FROM person_capabilities pc
-               WHERE pc.person_id = p.id
+               WHERE pc.person_id = (SELECT sa.person_id FROM session_assignments sa WHERE sa.session_id = s.id AND sa.role IN ('lead_teacher', 'foreign_teacher', 'ta_solo') LIMIT 1)
              ), '{}') as teacher_capabilities
       FROM sessions s
       LEFT JOIN classes c ON c.id = s.class_id
       LEFT JOIN rooms r ON r.id = s.room_id
       LEFT JOIN time_slots ts ON ts.id = s.time_slot_id
-      LEFT JOIN session_assignments sa ON sa.session_id = s.id
-      LEFT JOIN persons p ON p.id = sa.person_id
       WHERE s.week_id = $1
       ORDER BY ts.day_of_week, ts.start_time
     `, [weekId]);

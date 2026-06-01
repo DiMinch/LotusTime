@@ -80,13 +80,13 @@ router.patch('/sessions/:id/move', async (req, res, next) => {
 // Update Session Assignment (Teacher assignment)
 router.put('/sessions/:id/assignment', async (req, res, next) => {
   try {
-    const { person_id, role } = req.body;
+    const { person_id, role, ta_id, ta_role } = req.body;
     const db = require('../db/pool');
     
     await db.query('BEGIN');
     await db.query('DELETE FROM session_assignments WHERE session_id = $1', [req.params.id]);
     
-    let result = null;
+    const results = [];
     if (person_id) {
       const { rows } = await db.query(
         `INSERT INTO session_assignments (session_id, person_id, role)
@@ -94,11 +94,20 @@ router.put('/sessions/:id/assignment', async (req, res, next) => {
          RETURNING *`,
         [req.params.id, person_id, role || 'lead_teacher']
       );
-      result = rows[0];
+      results.push(rows[0]);
+    }
+    if (ta_id) {
+      const { rows } = await db.query(
+        `INSERT INTO session_assignments (session_id, person_id, role)
+         VALUES ($1, $2, $3)
+         RETURNING *`,
+        [req.params.id, ta_id, ta_role || 'ta_support']
+      );
+      results.push(rows[0]);
     }
     
     await db.query('COMMIT');
-    res.json({ success: true, assignment: result });
+    res.json({ success: true, assignments: results });
   } catch (err) {
     const db = require('../db/pool');
     try { await db.query('ROLLBACK'); } catch (_) {}

@@ -81,13 +81,24 @@ async function getWeekData(weekId) {
   const sessionsRes = await db.query(`
     SELECT s.*, c.code as class_code, c.class_type, r.name as room_name,
            ts.label as slot_label, ts.day_of_week, ts.start_time, ts.end_time,
-           p.short_name as teacher_name, sa.person_id, sa.role as assigned_role
+           -- Main teacher
+           (SELECT p.short_name FROM session_assignments sa JOIN persons p ON p.id = sa.person_id 
+            WHERE sa.session_id = s.id AND sa.role IN ('lead_teacher', 'foreign_teacher', 'ta_solo') LIMIT 1) as teacher_name,
+           (SELECT sa.person_id FROM session_assignments sa 
+            WHERE sa.session_id = s.id AND sa.role IN ('lead_teacher', 'foreign_teacher', 'ta_solo') LIMIT 1) as person_id,
+           (SELECT sa.role FROM session_assignments sa 
+            WHERE sa.session_id = s.id AND sa.role IN ('lead_teacher', 'foreign_teacher', 'ta_solo') LIMIT 1) as assigned_role,
+           -- Assistant / TA
+           (SELECT p.short_name FROM session_assignments sa JOIN persons p ON p.id = sa.person_id 
+            WHERE sa.session_id = s.id AND sa.role IN ('ta_support', 'ta_kids', 'ta_ielts') LIMIT 1) as ta_name,
+           (SELECT sa.person_id FROM session_assignments sa 
+            WHERE sa.session_id = s.id AND sa.role IN ('ta_support', 'ta_kids', 'ta_ielts') LIMIT 1) as ta_id,
+           (SELECT sa.role FROM session_assignments sa 
+            WHERE sa.session_id = s.id AND sa.role IN ('ta_support', 'ta_kids', 'ta_ielts') LIMIT 1) as assigned_ta_role
     FROM sessions s
     LEFT JOIN classes c ON c.id = s.class_id
     LEFT JOIN rooms r ON r.id = s.room_id
     LEFT JOIN time_slots ts ON ts.id = s.time_slot_id
-    LEFT JOIN session_assignments sa ON sa.session_id = s.id
-    LEFT JOIN persons p ON p.id = sa.person_id
     WHERE s.week_id = $1
     ORDER BY ts.day_of_week, ts.start_time, r.name
   `, [weekId]);
@@ -259,7 +270,8 @@ exports.exportExcel = async (req, res, next) => {
 
           if (session) {
             const lines = [session.class_code];
-            if (session.teacher_name) lines.push(session.teacher_name);
+            const tDisplay = [session.teacher_name, session.ta_name].filter(Boolean).join(' + ');
+            if (tDisplay) lines.push(tDisplay);
             cell.value = lines.join('\n');
             cell.alignment = { wrapText: true, horizontal: 'center', vertical: 'middle' };
             cell.font = { name: 'Arial', size: 9.5, bold: true };
@@ -419,9 +431,10 @@ exports.exportPdf = async (req, res, next) => {
             doc.fontSize(8).font('CustomBold').fillColor('#222');
             doc.text(session.class_code, x + 3, y + 5, { width: colWidth - 6, align: 'center' });
 
-            if (session.teacher_name) {
+            const tDisplay = [session.teacher_name, session.ta_name].filter(Boolean).join(' + ');
+            if (tDisplay) {
               doc.fontSize(7).font('CustomRegular').fillColor('#666');
-              doc.text(session.teacher_name, x + 3, y + 18, { width: colWidth - 6, align: 'center' });
+              doc.text(tDisplay, x + 3, y + 18, { width: colWidth - 6, align: 'center' });
             }
           } else {
             doc.rect(x, y, colWidth, rowHeight).lineWidth(0.3).stroke('#eee');
@@ -644,7 +657,8 @@ function addRoomGridExcelSheet(workbook, week, sessions, rooms, slots, weekLabel
 
         if (session) {
           const lines = [session.class_code];
-          if (session.teacher_name) lines.push(session.teacher_name);
+          const tDisplay = [session.teacher_name, session.ta_name].filter(Boolean).join(' + ');
+          if (tDisplay) lines.push(tDisplay);
           cell.value = lines.join('\n');
           cell.alignment = { wrapText: true, horizontal: 'center', vertical: 'middle' };
           cell.font = { name: 'Arial', size: 9.5, bold: true };
@@ -778,8 +792,9 @@ async function addClassExcelSheet(workbook, week, sessions, slots, weekLabel) {
       row.getCell(4).alignment = { horizontal: 'center', vertical: 'middle' };
 
       // Teacher
-      row.getCell(5).value = s.teacher_name || 'Chưa phân công';
-      if (!s.teacher_name) {
+      const tDisplay = [s.teacher_name, s.ta_name].filter(Boolean).join(' + ');
+      row.getCell(5).value = tDisplay || 'Chưa phân công';
+      if (!tDisplay) {
         row.getCell(5).font = { name: 'Arial', italic: true, color: { argb: 'FFDC2626' } };
       } else {
         row.getCell(5).font = { name: 'Arial', bold: true };
@@ -788,14 +803,26 @@ async function addClassExcelSheet(workbook, week, sessions, slots, weekLabel) {
 
       // Role
       let roleLabel = '';
+      const roles = [];
       if (s.assigned_role) {
-        roleLabel = s.assigned_role === 'lead_teacher' ? 'GV Chính' :
-                    s.assigned_role === 'foreign_teacher' ? 'GV Nước Ngoài' :
-                    s.assigned_role === 'ta_solo' ? 'TA Độc Lập' :
-                    s.assigned_role === 'ta_support' ? 'TA Hỗ Trợ' :
-                    s.assigned_role === 'ta_ielts' ? 'TA IELTS' :
-                    s.assigned_role === 'ta_kids' ? 'TA Kids' : s.assigned_role;
+        const mainLabel = s.assigned_role === 'lead_teacher' ? 'GV Chính' :
+                          s.assigned_role === 'foreign_teacher' ? 'GV Nước Ngoài' :
+                          s.assigned_role === 'ta_solo' ? 'TA Độc Lập' :
+                          s.assigned_role === 'ta_support' ? 'TA Hỗ Trợ' :
+                          s.assigned_role === 'ta_ielts' ? 'TA IELTS' :
+                          s.assigned_role === 'ta_kids' ? 'TA Kids' : s.assigned_role;
+        roles.push(mainLabel);
       }
+      if (s.assigned_ta_role) {
+        const taLabel = s.assigned_ta_role === 'lead_teacher' ? 'GV Chính' :
+                        s.assigned_ta_role === 'foreign_teacher' ? 'GV Nước Ngoài' :
+                        s.assigned_ta_role === 'ta_solo' ? 'TA Độc Lập' :
+                        s.assigned_ta_role === 'ta_support' ? 'TA Hỗ Trợ' :
+                        s.assigned_ta_role === 'ta_ielts' ? 'TA IELTS' :
+                        s.assigned_ta_role === 'ta_kids' ? 'TA Kids' : s.assigned_ta_role;
+        roles.push(taLabel);
+      }
+      roleLabel = roles.join(' + ');
       row.getCell(6).value = roleLabel;
       row.getCell(6).alignment = { horizontal: 'center', vertical: 'middle' };
 
@@ -886,7 +913,7 @@ async function addTeacherExcelSheet(workbook, week, sessions, slots, weekLabel) 
   let rowIdx = 6;
 
   // Add Unassigned first if any
-  const unassignedSessions = sessions.filter(s => !s.person_id);
+  const unassignedSessions = sessions.filter(s => !s.person_id && !s.ta_id);
   if (unassignedSessions.length > 0) {
     const mergedUnassigned = mergeContiguousSessions(unassignedSessions, slots);
     mergedUnassigned.forEach((s, sIdx) => {
@@ -930,7 +957,7 @@ async function addTeacherExcelSheet(workbook, week, sessions, slots, weekLabel) 
 
   // Then add each active teacher
   persons.forEach(p => {
-    const tSessions = sessions.filter(s => s.person_id === p.id);
+    const tSessions = sessions.filter(s => s.person_id === p.id || s.ta_id === p.id);
     if (tSessions.length === 0) return;
 
     const merged = mergeContiguousSessions(tSessions, slots);
@@ -960,13 +987,20 @@ async function addTeacherExcelSheet(workbook, week, sessions, slots, weekLabel) 
       row.getCell(5).alignment = { horizontal: 'center', vertical: 'middle' };
 
       let roleLabel = '';
-      if (s.assigned_role) {
+      if (s.person_id === p.id && s.assigned_role) {
         roleLabel = s.assigned_role === 'lead_teacher' ? 'GV Chính' :
                     s.assigned_role === 'foreign_teacher' ? 'GV Nước Ngoài' :
                     s.assigned_role === 'ta_solo' ? 'TA Độc Lập' :
                     s.assigned_role === 'ta_support' ? 'TA Hỗ Trợ' :
                     s.assigned_role === 'ta_ielts' ? 'TA IELTS' :
                     s.assigned_role === 'ta_kids' ? 'TA Kids' : s.assigned_role;
+      } else if (s.ta_id === p.id && s.assigned_ta_role) {
+        roleLabel = s.assigned_ta_role === 'lead_teacher' ? 'GV Chính' :
+                    s.assigned_ta_role === 'foreign_teacher' ? 'GV Nước Ngoài' :
+                    s.assigned_ta_role === 'ta_solo' ? 'TA Độc Lập' :
+                    s.assigned_ta_role === 'ta_support' ? 'TA Hỗ Trợ' :
+                    s.assigned_ta_role === 'ta_ielts' ? 'TA IELTS' :
+                    s.assigned_ta_role === 'ta_kids' ? 'TA Kids' : s.assigned_ta_role;
       }
       row.getCell(6).value = roleLabel;
       row.getCell(6).alignment = { horizontal: 'center', vertical: 'middle' };
@@ -1175,22 +1209,35 @@ async function drawPdfClassView(doc, week, sessions, slots, weekLabel) {
       drawX += colWidths[3];
 
       // Teacher
-      doc.font(s.teacher_name ? 'CustomBold' : 'CustomOblique');
-      doc.fillColor(s.teacher_name ? '#333' : '#dc2626');
-      doc.text(s.teacher_name || 'Chưa phân công', drawX + 6, y + 6, { width: colWidths[4] - 12 });
+      const tDisplay = [s.teacher_name, s.ta_name].filter(Boolean).join(' + ');
+      doc.font(tDisplay ? 'CustomBold' : 'CustomOblique');
+      doc.fillColor(tDisplay ? '#333' : '#dc2626');
+      doc.text(tDisplay || 'Chưa phân công', drawX + 6, y + 6, { width: colWidths[4] - 12 });
       drawX += colWidths[4];
 
       // Role
       doc.font('CustomRegular').fillColor('#555');
       let roleLabel = '';
+      const roles = [];
       if (s.assigned_role) {
-        roleLabel = s.assigned_role === 'lead_teacher' ? 'GV Chính' :
-                    s.assigned_role === 'foreign_teacher' ? 'GV Nước Ngoài' :
-                    s.assigned_role === 'ta_solo' ? 'TA Độc Lập' :
-                    s.assigned_role === 'ta_support' ? 'TA Hỗ Trợ' :
-                    s.assigned_role === 'ta_ielts' ? 'TA IELTS' :
-                    s.assigned_role === 'ta_kids' ? 'TA Kids' : s.assigned_role;
+        const mainLabel = s.assigned_role === 'lead_teacher' ? 'GV Chính' :
+                          s.assigned_role === 'foreign_teacher' ? 'GV Nước Ngoài' :
+                          s.assigned_role === 'ta_solo' ? 'TA Độc Lập' :
+                          s.assigned_role === 'ta_support' ? 'TA Hỗ Trợ' :
+                          s.assigned_role === 'ta_ielts' ? 'TA IELTS' :
+                          s.assigned_role === 'ta_kids' ? 'TA Kids' : s.assigned_role;
+        roles.push(mainLabel);
       }
+      if (s.assigned_ta_role) {
+        const taLabel = s.assigned_ta_role === 'lead_teacher' ? 'GV Chính' :
+                        s.assigned_ta_role === 'foreign_teacher' ? 'GV Nước Ngoài' :
+                        s.assigned_ta_role === 'ta_solo' ? 'TA Độc Lập' :
+                        s.assigned_ta_role === 'ta_support' ? 'TA Hỗ Trợ' :
+                        s.assigned_ta_role === 'ta_ielts' ? 'TA IELTS' :
+                        s.assigned_ta_role === 'ta_kids' ? 'TA Kids' : s.assigned_ta_role;
+        roles.push(taLabel);
+      }
+      roleLabel = roles.join(' + ');
       doc.text(roleLabel, drawX + 4, y + 6, { width: colWidths[5] - 8, align: 'center' });
 
       y += rowHeight;
@@ -1232,22 +1279,24 @@ async function drawPdfTeacherView(doc, week, sessions, slots, weekLabel) {
   const persons = personsRes.rows;
 
   // Unassigned first
-  const unassigned = sessions.filter(s => !s.person_id);
+  const unassigned = sessions.filter(s => !s.person_id && !s.ta_id);
   const teacherGroups = [];
   if (unassigned.length > 0) {
     teacherGroups.push({
       short_name: 'CHƯA PHÂN CÔNG',
       full_name: '—',
-      sessions: unassigned
+      sessions: unassigned,
+      personId: null
     });
   }
   persons.forEach(p => {
-    const tSessions = sessions.filter(s => s.person_id === p.id);
+    const tSessions = sessions.filter(s => s.person_id === p.id || s.ta_id === p.id);
     if (tSessions.length > 0) {
       teacherGroups.push({
         short_name: p.short_name,
         full_name: p.full_name || p.name || '',
-        sessions: tSessions
+        sessions: tSessions,
+        personId: p.id
       });
     }
   });
@@ -1315,13 +1364,20 @@ async function drawPdfTeacherView(doc, week, sessions, slots, weekLabel) {
       // Role
       doc.font('CustomRegular').fillColor('#555');
       let roleLabel = '';
-      if (s.assigned_role) {
+      if (s.person_id === group.personId && s.assigned_role) {
         roleLabel = s.assigned_role === 'lead_teacher' ? 'GV Chính' :
                     s.assigned_role === 'foreign_teacher' ? 'GV Nước Ngoài' :
                     s.assigned_role === 'ta_solo' ? 'TA Độc Lập' :
                     s.assigned_role === 'ta_support' ? 'TA Hỗ Trợ' :
                     s.assigned_role === 'ta_ielts' ? 'TA IELTS' :
                     s.assigned_role === 'ta_kids' ? 'TA Kids' : s.assigned_role;
+      } else if (s.ta_id === group.personId && s.assigned_ta_role) {
+        roleLabel = s.assigned_ta_role === 'lead_teacher' ? 'GV Chính' :
+                    s.assigned_ta_role === 'foreign_teacher' ? 'GV Nước Ngoài' :
+                    s.assigned_ta_role === 'ta_solo' ? 'TA Độc Lập' :
+                    s.assigned_ta_role === 'ta_support' ? 'TA Hỗ Trợ' :
+                    s.assigned_ta_role === 'ta_ielts' ? 'TA IELTS' :
+                    s.assigned_ta_role === 'ta_kids' ? 'TA Kids' : s.assigned_ta_role;
       }
       doc.text(roleLabel, drawX + 4, y + 6, { width: colWidths[5] - 8, align: 'center' });
 
