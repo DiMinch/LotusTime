@@ -91,6 +91,7 @@ def solve():
         # 1. Variables (Segment-aware)
         session_vars = {}  # maps (c_id, s, start_ts_id, r_id) -> BoolVar
         assign_vars = {}   # maps (c_id, s, start_ts_id, r_id, seg_idx, p_id) -> BoolVar
+        ta_assign_vars = {} # maps (c_id, s, start_ts_id, r_id, seg_idx, p_id) -> BoolVar
 
         # Count teachers
         def is_teacher(p):
@@ -187,7 +188,25 @@ def solve():
                             if not candidates:
                                 impossible = True
                                 break
-                            seg_candidates.append((seg_idx, seg_tsids, candidates))
+
+                            # TA capability logic for this segment
+                            required_ta_cap = seg.get('required_ta_capability')
+                            ta_candidates = []
+                            if required_ta_cap and required_ta_cap != 'none':
+                                for p in persons:
+                                    p_caps = p.get('capabilities', [])
+                                    if required_ta_cap not in p_caps:
+                                        continue
+                                    if allowed_pids and p['id'] not in allowed_pids:
+                                        continue
+                                    if not all((p['id'], tid) in free_slots for tid in seg_tsids):
+                                        continue
+                                    ta_candidates.append(p)
+                                if not ta_candidates:
+                                    impossible = True
+                                    break
+                                    
+                            seg_candidates.append((seg_idx, seg_tsids, candidates, required_ta_cap, ta_candidates))
                             
                         if impossible:
                             continue
@@ -201,7 +220,7 @@ def solve():
                             room_ts_coverage[(tid, r['id'])].append(s_var)
                             
                         # Create segment assignment variables
-                        for seg_idx, seg_tsids, candidates in seg_candidates:
+                        for seg_idx, seg_tsids, candidates, required_ta_cap, ta_candidates in seg_candidates:
                             seg_assign_vars = []
                             for p in candidates:
                                 a_var = model.NewBoolVar(f"assign_c{c['id']}_s{s}_ts{ts['id']}_r{r['id']}_seg{seg_idx}_p{p['id']}")
@@ -214,6 +233,30 @@ def solve():
                                     
                             # Link segment assignment to session active status
                             model.Add(sum(seg_assign_vars) == s_var)
+
+                            # Handle TA assignment if required
+                            if required_ta_cap and required_ta_cap != 'none':
+                                seg_ta_assign_vars = []
+                                for p in ta_candidates:
+                                    ta_var = model.NewBoolVar(f"assign_ta_c{c['id']}_s{s}_ts{ts['id']}_r{r['id']}_seg{seg_idx}_p{p['id']}")
+                                    ta_assign_vars[(c['id'], s, ts['id'], r['id'], seg_idx, p['id'])] = ta_var
+                                    seg_ta_assign_vars.append(ta_var)
+                                    
+                                    # Add to teacher coverage (TA is busy)
+                                    for tid in seg_tsids:
+                                        teacher_ts_coverage[(tid, p['id'])].append(ta_var)
+                                        
+                                # Link TA segment assignment to session active status
+                                model.Add(sum(seg_ta_assign_vars) == s_var)
+
+                                # Prevent main teacher and TA from being the same person
+                                for p in persons:
+                                    main_has = any(x['id'] == p['id'] for x in candidates)
+                                    ta_has = any(x['id'] == p['id'] for x in ta_candidates)
+                                    if main_has and ta_has:
+                                        m_var = assign_vars[(c['id'], s, ts['id'], r['id'], seg_idx, p['id'])]
+                                        t_var = ta_assign_vars[(c['id'], s, ts['id'], r['id'], seg_idx, p['id'])]
+                                        model.Add(m_var + t_var <= s_var)
 
         print(f"[Solver Debug] Number of CP-SAT session variables: {len(session_vars)}, assignment variables: {len(assign_vars)}", flush=True)
 
@@ -595,15 +638,29 @@ def solve():
                         if not role or role == 'any':
                             role = 'lead_teacher'
                             
+                        # Look up TA assignment
+                        ta_pid = None
+                        ta_role = None
+                        for (t_cid, t_s, t_tsid, t_rid, t_seg_idx, t_pid), t_var in ta_assign_vars.items():
+                            if t_cid == cid and t_s == s and t_tsid == tsid and t_rid == rid and t_seg_idx == seg_idx:
+                                if solver.Value(t_var) == 1:
+                                    ta_pid = t_pid
+                                    ta_role = c_segs[seg_idx].get('required_ta_capability')
+                                    break
+                                    
                         for bid in seg_tsids:
-                            result_sessions.append({
+                            sess = {
                                 "class_id": cid,
                                 "session_index": s,
                                 "time_slot_id": bid,
                                 "room_id": rid,
                                 "teacher_id": pid,
                                 "role": role
-                            })
+                            }
+                            if ta_pid:
+                                sess["ta_id"] = ta_pid
+                                sess["ta_role"] = ta_role
+                            result_sessions.append(sess)
             
             return jsonify({
                 "status": "optimal" if status == cp_model.OPTIMAL else "feasible",

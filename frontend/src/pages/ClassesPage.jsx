@@ -292,24 +292,54 @@ export default function ClassesPage() {
               ) : (
                 <div>
                   {form.segments.map((seg, idx) => (
-                    <div key={idx} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 2fr auto', gap: 'var(--space-sm)', marginBottom: 'var(--space-sm)', alignItems: 'center' }}>
-                      <input className="text-input" value={seg.label} placeholder="Tên phân đoạn"
-                        onChange={e => updateSegment(idx, 'label', e.target.value)}
-                        style={{ fontSize: 'var(--text-body-sm-size)' }}
-                      />
-                      <input className="text-input" type="number" value={seg.duration_minutes} placeholder="Phút"
-                        onChange={e => updateSegment(idx, 'duration_minutes', parseInt(e.target.value) || 0)}
-                        style={{ fontSize: 'var(--text-body-sm-size)' }}
-                      />
-                      <select className="select-input" value={seg.required_capability}
-                        onChange={e => updateSegment(idx, 'required_capability', e.target.value)}
-                        style={{ fontSize: 'var(--text-body-sm-size)' }}
-                      >
-                        {SEGMENT_ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-                      </select>
-                      <button className="btn-icon" type="button" onClick={() => removeSegment(idx)} title="Xóa phân đoạn">
-                        <X size={16} color="var(--color-accent)" />
-                      </button>
+                    <div key={idx} style={{ display: 'flex', flexDirection: 'column', gap: '8px', border: '1px dashed var(--color-hairline)', padding: '12px', borderRadius: '4px', marginBottom: '12px', background: 'var(--color-surface)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontWeight: 600, fontSize: '12px', color: 'var(--color-primary-dark)' }}>{seg.label || `Phân đoạn ${idx + 1}`}</span>
+                        <button className="btn-icon" type="button" onClick={() => removeSegment(idx)} title="Xóa phân đoạn" style={{ padding: 2 }}>
+                          <X size={16} color="var(--color-accent)" />
+                        </button>
+                      </div>
+                      
+                      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '8px' }}>
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                          <label style={{ fontSize: '11px', color: 'var(--color-mute)', fontWeight: 500 }}>Tên phân đoạn</label>
+                          <input className="text-input" value={seg.label} placeholder="VD: Listening, Speaking..."
+                            onChange={e => updateSegment(idx, 'label', e.target.value)}
+                            style={{ fontSize: '12px', height: '32px', padding: '4px 8px' }}
+                          />
+                        </div>
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                          <label style={{ fontSize: '11px', color: 'var(--color-mute)', fontWeight: 500 }}>Thời lượng (phút)</label>
+                          <input className="text-input" type="number" value={seg.duration_minutes} placeholder="Phút"
+                            onChange={e => updateSegment(idx, 'duration_minutes', parseInt(e.target.value) || 0)}
+                            style={{ fontSize: '12px', height: '32px', padding: '4px 8px' }}
+                          />
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                          <label style={{ fontSize: '11px', color: 'var(--color-mute)', fontWeight: 500 }}>Giáo viên chính</label>
+                          <select className="select-input" value={seg.required_capability || ''}
+                            onChange={e => updateSegment(idx, 'required_capability', e.target.value)}
+                            style={{ fontSize: '12px', height: '32px', padding: '4px 8px' }}
+                          >
+                            {SEGMENT_ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                          </select>
+                        </div>
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                          <label style={{ fontSize: '11px', color: 'var(--color-mute)', fontWeight: 500 }}>Trợ giảng đi kèm (TA)</label>
+                          <select className="select-input" value={seg.required_ta_capability || ''}
+                            onChange={e => updateSegment(idx, 'required_ta_capability', e.target.value)}
+                            style={{ fontSize: '12px', height: '32px', padding: '4px 8px' }}
+                          >
+                            <option value="">— Không có —</option>
+                            <option value="ta_support">TA Hỗ trợ</option>
+                            <option value="ta_ielts">TA IELTS</option>
+                            <option value="ta_kids">TA Kids</option>
+                          </select>
+                        </div>
+                      </div>
                     </div>
                   ))}
                   <button className="btn-outline btn-sm" type="button" onClick={addSegment} style={{ marginTop: 'var(--space-xs)' }}>

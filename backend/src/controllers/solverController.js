@@ -58,6 +58,12 @@ exports.solveWeek = async (req, res, next) => {
             [rows[0].id, s.teacher_id, s.role || 'lead_teacher']
           );
         }
+        if (s.ta_id) {
+          await db.query(
+            `INSERT INTO session_assignments (session_id, person_id, role) VALUES ($1, $2, $3)`,
+            [rows[0].id, s.ta_id, s.ta_role || 'ta_support']
+          );
+        }
       }
 
       // Update week status to review
