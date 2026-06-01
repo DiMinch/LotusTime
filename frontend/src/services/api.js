@@ -80,7 +80,7 @@ export const api = {
   getSessions:   (weekId)       => request(`/weeks/${weekId}/sessions`),
   pinSession:    (weekId, data) => request(`/weeks/${weekId}/pin`, { method: 'POST', body: data }),
   deleteSession: (weekId, sid)  => request(`/weeks/${weekId}/sessions/${sid}`, { method: 'DELETE' }),
-  updateSessionAssignment: (sid, personId, role) => request(`/sessions/${sid}/assignment`, { method: 'PUT', body: { person_id: personId, role } }),
+  updateSessionAssignment: (sid, personId, role, taId, taRole) => request(`/sessions/${sid}/assignment`, { method: 'PUT', body: { person_id: personId, role, ta_id: taId, ta_role: taRole } }),
 
   // Export
   exportExcel: (weekId) => download(`/weeks/${weekId}/export/excel`, `TKB_${weekId}.xlsx`),

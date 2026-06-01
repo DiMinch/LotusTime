@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { DndContext, DragOverlay, useDraggable, useDroppable, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
 import { api } from '../../services/api'
 import { Books, PushPin, ArrowsOutCardinal, FileXls, FilePdf, PencilSimple, X, Download } from '@phosphor-icons/react'
@@ -124,6 +124,163 @@ const mergeContiguousSessions = (sList, timeSlots) => {
   return merged;
 };
 
+/* ── Searchable Select Component ──────────────────────── */
+function SearchableSelect({ options, value, onChange, placeholder, emptyLabel = "— Trống —" }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
+
+  const selectedOption = options.find(opt => opt.value === value);
+  
+  useEffect(() => {
+    if (isOpen) {
+      setSearch('');
+    }
+  }, [isOpen]);
+
+  const filteredOptions = options.filter(opt => 
+    opt.label.toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <div ref={containerRef} style={{ position: 'relative', width: '100%' }}>
+      <div 
+        onClick={() => setIsOpen(!isOpen)}
+        style={{
+          minHeight: '38px',
+          padding: '6px 12px',
+          border: '1px solid var(--color-hairline)',
+          borderRadius: 'var(--radius-sm)',
+          background: 'var(--color-surface)',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          fontSize: 'var(--text-body-sm-size)',
+          boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+          userSelect: 'none'
+        }}
+      >
+        <span style={{ color: selectedOption ? 'var(--color-ink)' : 'var(--color-mute)' }}>
+          {selectedOption ? selectedOption.label : emptyLabel}
+        </span>
+        <span style={{ color: 'var(--color-mute)', fontSize: '9px', opacity: 0.7 }}>▼</span>
+      </div>
+
+      {isOpen && (
+        <div style={{
+          position: 'absolute',
+          top: 'calc(100% + 4px)',
+          left: 0,
+          right: 0,
+          background: 'var(--color-surface)',
+          border: '1px solid var(--color-hairline)',
+          borderRadius: 'var(--radius-sm)',
+          boxShadow: 'var(--shadow-lg)',
+          zIndex: 1000,
+          padding: '6px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '6px'
+        }}>
+          <input
+            type="text"
+            placeholder={placeholder || "Gõ để tìm kiếm..."}
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            autoFocus
+            style={{
+              width: '100%',
+              padding: '8px 10px',
+              border: '1px solid var(--color-hairline)',
+              borderRadius: '4px',
+              fontSize: 'var(--text-body-sm-size)',
+              outline: 'none',
+              background: 'var(--color-surface-soft)',
+              color: 'var(--color-ink)'
+            }}
+            onClick={e => e.stopPropagation()}
+          />
+          <div style={{ maxHeight: '180px', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+            <div 
+              onClick={() => {
+                onChange('');
+                setIsOpen(false);
+              }}
+              style={{
+                padding: '8px 10px',
+                cursor: 'pointer',
+                borderRadius: '4px',
+                background: value === '' ? 'var(--color-primary-soft)' : 'transparent',
+                color: value === '' ? 'var(--color-primary)' : 'var(--color-ink)',
+                fontSize: 'var(--text-body-sm-size)',
+                transition: 'background 0.15s, color 0.15s'
+              }}
+              onMouseEnter={e => {
+                if (value !== '') {
+                  e.currentTarget.style.background = 'var(--color-surface-soft)';
+                }
+              }}
+              onMouseLeave={e => {
+                if (value !== '') {
+                  e.currentTarget.style.background = 'transparent';
+                }
+              }}
+            >
+              {emptyLabel}
+            </div>
+            {filteredOptions.map(opt => (
+              <div 
+                key={opt.value}
+                onClick={() => {
+                  onChange(opt.value);
+                  setIsOpen(false);
+                }}
+                style={{
+                  padding: '8px 10px',
+                  cursor: 'pointer',
+                  borderRadius: '4px',
+                  background: value === opt.value ? 'var(--color-primary-soft)' : 'transparent',
+                  color: value === opt.value ? 'var(--color-primary)' : 'var(--color-ink)',
+                  fontSize: 'var(--text-body-sm-size)',
+                  transition: 'background 0.15s, color 0.15s'
+                }}
+                onMouseEnter={e => {
+                  if (value !== opt.value) {
+                    e.currentTarget.style.background = 'var(--color-surface-soft)';
+                  }
+                }}
+                onMouseLeave={e => {
+                  if (value !== opt.value) {
+                    e.currentTarget.style.background = 'transparent';
+                  }
+                }}
+              >
+                {opt.label}
+              </div>
+            ))}
+            {filteredOptions.length === 0 && (
+              <div style={{ padding: '8px 10px', color: 'var(--color-mute)', fontSize: 'var(--text-caption-md-size)', fontStyle: 'italic', textAlign: 'center' }}>
+                Không tìm thấy kết quả
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── Draggable Session Card ───────────────────────────── */
 function SessionCard({ session, isDragging, isConnectedTop, isConnectedBottom, hideTeacherName, onEdit }) {
   const isPinned = session.is_pinned;
@@ -158,40 +315,32 @@ function SessionCard({ session, isDragging, isConnectedTop, isConnectedBottom, h
         zIndex: isDragging ? 100 : 1
       }}
     >
-      {/* Absolute edit button on all slots for individual selection */}
-      <button 
-        onClick={(e) => { e.stopPropagation(); onEdit && onEdit(session); }} 
-        style={{
-          position: 'absolute',
-          top: '4px',
-          right: '4px',
-          background: 'rgba(255, 255, 255, 0.85)',
-          border: '1px solid rgba(0, 0, 0, 0.15)',
-          borderRadius: '50%',
-          width: '18px',
-          height: '18px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: 'pointer',
-          color: colors.text,
-          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-          zIndex: 5,
-          opacity: 0.7,
-          transition: 'opacity 0.15s, transform 0.15s',
-        }}
-        onMouseEnter={(e) => { e.currentTarget.style.opacity = 1; e.currentTarget.style.transform = 'scale(1.1)'; }}
-        onMouseLeave={(e) => { e.currentTarget.style.opacity = 0.7; e.currentTarget.style.transform = 'scale(1)'; }}
-        title="Phân công giáo viên tiết này"
-      >
-        <PencilSimple size={10} weight="bold" />
-      </button>
-
       {/* Only show header if it's the top of the block, or if dragging */}
       {(!isConnectedTop || isDragging) && (
-        <div style={{ fontWeight: 700, fontSize: 'var(--text-body-sm-size)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingRight: '14px' }}>
+        <div style={{ fontWeight: 700, fontSize: 'var(--text-body-sm-size)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span>{session.class_code}</span>
-          <span style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+          <span style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+            <button 
+              onClick={(e) => { e.stopPropagation(); onEdit && onEdit(session); }} 
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: colors.text,
+                opacity: 0.6,
+                padding: '2px',
+                borderRadius: '3px',
+                transition: 'opacity 0.15s, background 0.15s',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.opacity = 1; e.currentTarget.style.background = 'rgba(0,0,0,0.06)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.opacity = 0.6; e.currentTarget.style.background = 'none'; }}
+              title="Phân công giáo viên lớp này"
+            >
+              <PencilSimple size={13} weight="bold" />
+            </button>
             {isPinned && <PushPin size={13} color="var(--color-accent)" weight="fill" />}
             {!isPinned && <ArrowsOutCardinal size={13} style={{ opacity: 0.6 }} weight="light" />}
           </span>
@@ -200,26 +349,43 @@ function SessionCard({ session, isDragging, isConnectedTop, isConnectedBottom, h
       
       {/* We can show teacher name on all blocks or just the top. Showing on all is fine if roles change per segment */}
       {(!hideTeacherName) && (
-        <div style={{ fontSize: 'var(--text-caption-sm-size)', opacity: 0.85, fontWeight: 500, display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: isConnectedTop ? 'auto' : '0', paddingRight: '14px' }}>
-          <span>{session.teacher_name || '—'}</span>
-          {role && role !== 'lead_teacher' && (
-            <span style={{
-              fontSize: '9px',
-              padding: '2px 4px',
-              borderRadius: '3px',
-              background: 'rgba(0,0,0,0.06)',
-              textTransform: 'uppercase',
-              fontWeight: 700,
-              letterSpacing: '0.02em',
-              opacity: 0.8
-            }}>
-              {role === 'foreign_teacher' ? 'For' :
-               role === 'ta_solo' ? 'TA Solo' :
-               role === 'ta_support' ? 'TA Support' :
-               role === 'ta_ielts' ? 'TA IELTS' :
-               role === 'ta_kids' ? 'TA Kids' : role}
-            </span>
-          )}
+        <div style={{ fontSize: 'var(--text-caption-sm-size)', opacity: 0.85, fontWeight: 500, display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: isConnectedTop ? 'auto' : '0' }}>
+          <span>{[session.teacher_name, session.ta_name].filter(Boolean).join(' + ') || '—'}</span>
+          {(() => {
+            const mainRole = session.assigned_role || '';
+            const taRole = session.assigned_ta_role || '';
+            const rList = [];
+            if (mainRole && mainRole !== 'lead_teacher') {
+              rList.push(mainRole === 'foreign_teacher' ? 'For' :
+                         mainRole === 'ta_solo' ? 'TA Solo' :
+                         mainRole === 'ta_support' ? 'TA Support' :
+                         mainRole === 'ta_ielts' ? 'TA IELTS' :
+                         mainRole === 'ta_kids' ? 'TA Kids' : mainRole);
+            }
+            if (taRole && taRole !== 'ta_support') {
+              rList.push(taRole === 'lead_teacher' ? 'Lead' :
+                         taRole === 'foreign_teacher' ? 'For' :
+                         taRole === 'ta_solo' ? 'TA Solo' :
+                         taRole === 'ta_ielts' ? 'TA IELTS' :
+                         taRole === 'ta_kids' ? 'TA Kids' : taRole);
+            }
+            const label = rList.join(' + ');
+            if (!label) return null;
+            return (
+              <span style={{
+                fontSize: '9px',
+                padding: '2px 4px',
+                borderRadius: '3px',
+                background: 'rgba(0,0,0,0.06)',
+                textTransform: 'uppercase',
+                fontWeight: 700,
+                letterSpacing: '0.02em',
+                opacity: 0.8
+              }}>
+                {label}
+              </span>
+            );
+          })()}
         </div>
       )}
     </div>
@@ -362,7 +528,9 @@ export default function ScheduleGridTab({ weekId }) {
     group.forEach(s => {
       edits[s.id] = {
         person_id: s.person_id || '',
-        assigned_role: s.assigned_role || 'lead_teacher'
+        assigned_role: s.assigned_role || 'lead_teacher',
+        ta_id: s.ta_id || '',
+        assigned_ta_role: s.assigned_ta_role || 'ta_support'
       };
     });
 
@@ -375,7 +543,13 @@ export default function ScheduleGridTab({ weekId }) {
       await Promise.all(
         editingGroup.map(s => {
           const edit = groupEdits[s.id] || {};
-          return api.updateSessionAssignment(s.id, edit.person_id || null, edit.assigned_role);
+          return api.updateSessionAssignment(
+            s.id,
+            edit.person_id || null,
+            edit.assigned_role,
+            edit.ta_id || null,
+            edit.assigned_ta_role
+          );
         })
       );
       toast.success('Cập nhật phân công giáo viên thành công!');
@@ -934,9 +1108,19 @@ export default function ScheduleGridTab({ weekId }) {
               </button>
             </div>
 
-            <div style={{ maxHeight: '400px', overflowY: 'auto', paddingRight: '4px', display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
+            <div style={{ maxHeight: '420px', overflowY: 'auto', paddingRight: '6px', display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
               {editingGroup.map((s, idx) => {
-                const edit = groupEdits[s.id] || { person_id: '', assigned_role: 'lead_teacher' };
+                const edit = groupEdits[s.id] || { person_id: '', assigned_role: 'lead_teacher', ta_id: '', assigned_ta_role: 'ta_support' };
+                
+                const personOptions = persons.map(p => {
+                  const caps = p.capabilities || [];
+                  const capStr = caps.length > 0 ? ` (${caps.join(', ')})` : '';
+                  return {
+                    value: p.id,
+                    label: `${p.short_name} - ${p.full_name || p.name}${capStr}`
+                  };
+                });
+
                 return (
                   <div key={s.id} style={{ padding: 'var(--space-md)', background: 'var(--color-surface-soft)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-hairline)' }}>
                     <div style={{ fontWeight: 700, fontSize: 'var(--text-body-sm-size)', color: 'var(--color-ink)', marginBottom: 'var(--space-sm)', display: 'flex', justifyContent: 'space-between' }}>
@@ -944,55 +1128,89 @@ export default function ScheduleGridTab({ weekId }) {
                       <span style={{ fontSize: 'var(--text-caption-sm-size)', color: 'var(--color-mute)', fontWeight: 500 }}>Phòng: {s.room_name}</span>
                     </div>
                     
-                    <div style={{ display: 'flex', gap: 'var(--space-md)', flexDirection: 'row', flexWrap: 'wrap' }}>
-                      <div className="form-group" style={{ flex: '1 1 200px', marginBottom: 0 }}>
-                        <label className="form-label" style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Giáo viên / TA</label>
-                        <select
-                          className="select-input"
-                          value={edit.person_id}
-                          onChange={e => {
-                            const val = e.target.value;
-                            setGroupEdits(prev => ({
-                              ...prev,
-                              [s.id]: { ...prev[s.id], person_id: val }
-                            }));
-                          }}
-                          style={{ width: '100%' }}
-                        >
-                          <option value="">— Chưa phân công (Trống) —</option>
-                          {persons.map(p => {
-                            const caps = p.capabilities || [];
-                            const capStr = caps.length > 0 ? ` (${caps.join(', ')})` : '';
-                            return (
-                              <option key={p.id} value={p.id}>
-                                {p.short_name} - {p.full_name || p.name}{capStr}
-                              </option>
-                            );
-                          })}
-                        </select>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
+                      {/* Lead Teacher Selection */}
+                      <div style={{ display: 'flex', gap: 'var(--space-md)', flexDirection: 'row', flexWrap: 'wrap' }}>
+                        <div className="form-group" style={{ flex: '1 1 200px', marginBottom: 0 }}>
+                          <label className="form-label" style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px', display: 'block' }}>Giáo viên / TA chính</label>
+                          <SearchableSelect
+                            options={personOptions}
+                            value={edit.person_id}
+                            onChange={val => {
+                              setGroupEdits(prev => ({
+                                ...prev,
+                                [s.id]: { ...prev[s.id], person_id: val }
+                              }));
+                            }}
+                            placeholder="Tìm giáo viên..."
+                            emptyLabel="— Chưa phân công (Trống) —"
+                          />
+                        </div>
+
+                        <div className="form-group" style={{ flex: '1 1 200px', marginBottom: 0 }}>
+                          <label className="form-label" style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px', display: 'block' }}>Vai trò chính</label>
+                          <select
+                            className="select-input"
+                            value={edit.assigned_role}
+                            onChange={e => {
+                              const val = e.target.value;
+                              setGroupEdits(prev => ({
+                                ...prev,
+                                [s.id]: { ...prev[s.id], assigned_role: val }
+                              }));
+                            }}
+                            style={{ width: '100%', height: '38px' }}
+                          >
+                            <option value="lead_teacher">Giáo viên chính (Lead Teacher)</option>
+                            <option value="foreign_teacher">Giáo viên nước ngoài (Foreign Teacher)</option>
+                            <option value="ta_solo">Trợ giảng độc lập (TA Solo)</option>
+                            <option value="ta_support">Trợ giảng hỗ trợ (TA Support)</option>
+                            <option value="ta_ielts">Trợ giảng IELTS (TA IELTS)</option>
+                            <option value="ta_kids">Trợ giảng Kids (TA Kids)</option>
+                          </select>
+                        </div>
                       </div>
 
-                      <div className="form-group" style={{ flex: '1 1 200px', marginBottom: 0 }}>
-                        <label className="form-label" style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Vai trò</label>
-                        <select
-                          className="select-input"
-                          value={edit.assigned_role}
-                          onChange={e => {
-                            const val = e.target.value;
-                            setGroupEdits(prev => ({
-                              ...prev,
-                              [s.id]: { ...prev[s.id], assigned_role: val }
-                            }));
-                          }}
-                          style={{ width: '100%' }}
-                        >
-                          <option value="lead_teacher">Giáo viên chính (Lead Teacher)</option>
-                          <option value="foreign_teacher">Giáo viên nước ngoài (Foreign Teacher)</option>
-                          <option value="ta_solo">Trợ giảng độc lập (TA Solo)</option>
-                          <option value="ta_support">Trợ giảng hỗ trợ (TA Support)</option>
-                          <option value="ta_ielts">Trợ giảng IELTS (TA IELTS)</option>
-                          <option value="ta_kids">Trợ giảng Kids (TA Kids)</option>
-                        </select>
+                      {/* TA / Support Teacher Selection */}
+                      <div style={{ display: 'flex', gap: 'var(--space-md)', flexDirection: 'row', flexWrap: 'wrap', marginTop: '4px' }}>
+                        <div className="form-group" style={{ flex: '1 1 200px', marginBottom: 0 }}>
+                          <label className="form-label" style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px', display: 'block' }}>Trợ giảng (TA phụ)</label>
+                          <SearchableSelect
+                            options={personOptions}
+                            value={edit.ta_id}
+                            onChange={val => {
+                              setGroupEdits(prev => ({
+                                ...prev,
+                                [s.id]: { ...prev[s.id], ta_id: val }
+                              }));
+                            }}
+                            placeholder="Tìm trợ giảng..."
+                            emptyLabel="— Không có trợ giảng —"
+                          />
+                        </div>
+
+                        <div className="form-group" style={{ flex: '1 1 200px', marginBottom: 0 }}>
+                          <label className="form-label" style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px', display: 'block' }}>Vai trò trợ giảng</label>
+                          <select
+                            className="select-input"
+                            value={edit.assigned_ta_role}
+                            onChange={e => {
+                              const val = e.target.value;
+                              setGroupEdits(prev => ({
+                                ...prev,
+                                [s.id]: { ...prev[s.id], assigned_ta_role: val }
+                              }));
+                            }}
+                            style={{ width: '100%', height: '38px' }}
+                          >
+                            <option value="ta_support">Trợ giảng hỗ trợ (TA Support)</option>
+                            <option value="ta_solo">Trợ giảng độc lập (TA Solo)</option>
+                            <option value="ta_ielts">Trợ giảng IELTS (TA IELTS)</option>
+                            <option value="ta_kids">Trợ giảng Kids (TA Kids)</option>
+                            <option value="lead_teacher">Giáo viên chính (Lead Teacher)</option>
+                            <option value="foreign_teacher">Giáo viên nước ngoài (Foreign Teacher)</option>
+                          </select>
+                        </div>
                       </div>
                     </div>
                   </div>
