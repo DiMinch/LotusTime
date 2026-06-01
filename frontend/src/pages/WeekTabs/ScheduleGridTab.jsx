@@ -282,9 +282,8 @@ export default function ScheduleGridTab({ weekId }) {
   const [activeSession, setActiveSession] = useState(null)
   const [overCellId, setOverCellId] = useState(null)
   
-  const [editingSession, setEditingSession] = useState(null)
-  const [selectedPersonId, setSelectedPersonId] = useState('')
-  const [selectedRole, setSelectedRole] = useState('lead_teacher')
+  const [editingGroup, setEditingGroup] = useState([])
+  const [groupEdits, setGroupEdits] = useState({})
   const [viewMode, setViewMode] = useState('grid')
   
   const [showExportModal, setShowExportModal] = useState(false)
@@ -341,22 +340,47 @@ export default function ScheduleGridTab({ weekId }) {
   const parseCell = (id) => { const [tsId, roomId] = id.split('__'); return { tsId, roomId } }
 
   const openEditAssignment = (sess) => {
-    setSelectedPersonId(sess.person_id || '');
-    setSelectedRole(sess.assigned_role || 'lead_teacher');
-    setEditingSession(sess);
+    const sessTs = timeSlots.find(ts => ts.id === sess.time_slot_id);
+    const sessDay = sessTs ? sessTs.day_of_week : null;
+    
+    const group = sessions.filter(s => {
+      if (s.class_id !== sess.class_id) return false;
+      const ts = timeSlots.find(slot => slot.id === s.time_slot_id);
+      return ts && ts.day_of_week === sessDay;
+    }).map(s => {
+      const ts = timeSlots.find(slot => slot.id === s.time_slot_id) || {};
+      return {
+        ...s,
+        start_time: ts.start_time || '',
+        end_time: ts.end_time || '',
+        slot_label: ts.label || s.slot_label,
+        day_of_week: ts.day_of_week
+      };
+    }).sort((a, b) => a.start_time.localeCompare(b.start_time));
+
+    const edits = {};
+    group.forEach(s => {
+      edits[s.id] = {
+        person_id: s.person_id || '',
+        assigned_role: s.assigned_role || 'lead_teacher'
+      };
+    });
+
+    setEditingGroup(group);
+    setGroupEdits(edits);
   }
 
   const handleSaveAssignment = async () => {
     try {
-      if (editingSession.sessionIds && editingSession.sessionIds.length > 0) {
-        await Promise.all(editingSession.sessionIds.map(id => 
-          api.updateSessionAssignment(id, selectedPersonId || null, selectedRole)
-        ));
-      } else {
-        await api.updateSessionAssignment(editingSession.id, selectedPersonId || null, selectedRole);
-      }
+      await Promise.all(
+        editingGroup.map(s => {
+          const edit = groupEdits[s.id] || {};
+          return api.updateSessionAssignment(s.id, edit.person_id || null, edit.assigned_role);
+        })
+      );
       toast.success('Cập nhật phân công giáo viên thành công!');
-      setEditingSession(null);
+      setEditingGroup([]);
+      setGroupEdits({});
       load(); // Reload sessions to update grid
     } catch (err) {
       toast.error('Lỗi khi phân công giáo viên: ' + err.message);
@@ -895,69 +919,90 @@ export default function ScheduleGridTab({ weekId }) {
       </DragOverlay>
 
       {/* Edit Assignment Modal */}
-      {editingSession && (
-        <div className="modal-overlay" onClick={() => setEditingSession(null)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '420px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-lg)' }}>
-              <h2 className="modal-title" style={{ margin: 0 }}>Phân công Giáo viên</h2>
-              <button onClick={() => setEditingSession(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', color: 'var(--color-mute)' }}>
+      {editingGroup.length > 0 && (
+        <div className="modal-overlay" onClick={() => setEditingGroup([])}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px', width: '90%' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-md)', borderBottom: '1px solid var(--color-hairline)', paddingBottom: 'var(--space-sm)' }}>
+              <div>
+                <h2 className="modal-title" style={{ margin: 0, fontSize: 'var(--text-heading-sm-size)' }}>Phân công Giáo viên</h2>
+                <div style={{ fontSize: 'var(--text-caption-md-size)', color: 'var(--color-mute)', marginTop: '2px' }}>
+                  Lớp: <strong style={{ color: 'var(--color-primary-dark)' }}>{editingGroup[0].class_code}</strong>
+                </div>
+              </div>
+              <button onClick={() => setEditingGroup([])} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', color: 'var(--color-mute)' }}>
                 <X size={20} />
               </button>
             </div>
-            
-            <div style={{ marginBottom: 'var(--space-lg)', padding: 'var(--space-sm) var(--space-md)', background: 'var(--color-surface-soft)', borderRadius: 'var(--radius-sm)' }}>
-              <div style={{ fontSize: 'var(--text-body-sm-size)', marginBottom: '4px' }}>
-                Lớp: <strong style={{ color: 'var(--color-primary-dark)' }}>{editingSession.class_code}</strong>
-              </div>
-              <div style={{ fontSize: 'var(--text-body-sm-size)', marginBottom: '4px' }}>
-                Phòng: <strong>{editingSession.room_name}</strong>
-              </div>
-              <div style={{ fontSize: 'var(--text-body-sm-size)' }}>
-                Khung giờ: <strong>{editingSession.start_time && editingSession.end_time ? `${editingSession.start_time.slice(0,5)} - ${editingSession.end_time.slice(0,5)}` : editingSession.slot_label}</strong>
-              </div>
+
+            <div style={{ maxHeight: '400px', overflowY: 'auto', paddingRight: '4px', display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
+              {editingGroup.map((s, idx) => {
+                const edit = groupEdits[s.id] || { person_id: '', assigned_role: 'lead_teacher' };
+                return (
+                  <div key={s.id} style={{ padding: 'var(--space-md)', background: 'var(--color-surface-soft)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-hairline)' }}>
+                    <div style={{ fontWeight: 700, fontSize: 'var(--text-body-sm-size)', color: 'var(--color-ink)', marginBottom: 'var(--space-sm)', display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Tiết {idx + 1}: {s.slot_label} ({s.start_time.slice(0,5)} - {s.end_time.slice(0,5)})</span>
+                      <span style={{ fontSize: 'var(--text-caption-sm-size)', color: 'var(--color-mute)', fontWeight: 500 }}>Phòng: {s.room_name}</span>
+                    </div>
+                    
+                    <div style={{ display: 'flex', gap: 'var(--space-md)', flexDirection: 'row', flexWrap: 'wrap' }}>
+                      <div className="form-group" style={{ flex: '1 1 200px', marginBottom: 0 }}>
+                        <label className="form-label" style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Giáo viên / TA</label>
+                        <select
+                          className="select-input"
+                          value={edit.person_id}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setGroupEdits(prev => ({
+                              ...prev,
+                              [s.id]: { ...prev[s.id], person_id: val }
+                            }));
+                          }}
+                          style={{ width: '100%' }}
+                        >
+                          <option value="">— Chưa phân công (Trống) —</option>
+                          {persons.map(p => {
+                            const caps = p.capabilities || [];
+                            const capStr = caps.length > 0 ? ` (${caps.join(', ')})` : '';
+                            return (
+                              <option key={p.id} value={p.id}>
+                                {p.short_name} - {p.full_name || p.name}{capStr}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </div>
+
+                      <div className="form-group" style={{ flex: '1 1 200px', marginBottom: 0 }}>
+                        <label className="form-label" style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Vai trò</label>
+                        <select
+                          className="select-input"
+                          value={edit.assigned_role}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setGroupEdits(prev => ({
+                              ...prev,
+                              [s.id]: { ...prev[s.id], assigned_role: val }
+                            }));
+                          }}
+                          style={{ width: '100%' }}
+                        >
+                          <option value="lead_teacher">Giáo viên chính (Lead Teacher)</option>
+                          <option value="foreign_teacher">Giáo viên nước ngoài (Foreign Teacher)</option>
+                          <option value="ta_solo">Trợ giảng độc lập (TA Solo)</option>
+                          <option value="ta_support">Trợ giảng hỗ trợ (TA Support)</option>
+                          <option value="ta_ielts">Trợ giảng IELTS (TA IELTS)</option>
+                          <option value="ta_kids">Trợ giảng Kids (TA Kids)</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
-            <div className="form-group">
-              <label className="form-label">Chọn Giáo viên / TA</label>
-              <select
-                className="select-input"
-                value={selectedPersonId}
-                onChange={e => setSelectedPersonId(e.target.value)}
-                style={{ width: '100%' }}
-              >
-                <option value="">— Chưa phân công (Trống) —</option>
-                {persons.map(p => {
-                  const caps = p.capabilities || [];
-                  const capStr = caps.length > 0 ? ` (${caps.join(', ')})` : '';
-                  return (
-                    <option key={p.id} value={p.id}>
-                      {p.short_name} - {p.full_name || p.name}{capStr}
-                    </option>
-                  );
-                })}
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Vai trò phân công</label>
-              <select
-                className="select-input"
-                value={selectedRole}
-                onChange={e => setSelectedRole(e.target.value)}
-                style={{ width: '100%' }}
-              >
-                <option value="lead_teacher">Giáo viên chính (Lead Teacher)</option>
-                <option value="foreign_teacher">Giáo viên nước ngoài (Foreign Teacher)</option>
-                <option value="ta_solo">Trợ giảng độc lập (TA Solo)</option>
-                <option value="ta_support">Trợ giảng hỗ trợ (TA Support)</option>
-                <option value="ta_ielts">Trợ giảng IELTS (TA IELTS)</option>
-                <option value="ta_kids">Trợ giảng Kids (TA Kids)</option>
-              </select>
-            </div>
-
-            <div className="modal-actions" style={{ marginTop: 'var(--space-xl)' }}>
-              <button className="btn-outline btn-sm" onClick={() => setEditingSession(null)}>Hủy</button>
-              <button className="btn-primary btn-sm" onClick={handleSaveAssignment}>Lưu phân công</button>
+            <div className="modal-actions" style={{ marginTop: 'var(--space-xl)', borderTop: '1px solid var(--color-hairline)', paddingTop: 'var(--space-md)' }}>
+              <button className="btn-outline btn-sm" onClick={() => setEditingGroup([])}>Hủy</button>
+              <button className="btn-primary btn-sm" onClick={handleSaveAssignment}>Lưu tất cả</button>
             </div>
           </div>
         </div>
