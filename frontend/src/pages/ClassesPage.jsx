@@ -19,6 +19,7 @@ const SEGMENT_ROLES = [
   { value: 'ta_support', label: 'TA Hỗ trợ' },
   { value: 'ta_solo', label: 'TA Độc lập' },
   { value: 'ta_ielts', label: 'TA IELTS' },
+  { value: 'ta_kids', label: 'TA Kids' },
 ]
 
 const EMPTY_FORM = {
