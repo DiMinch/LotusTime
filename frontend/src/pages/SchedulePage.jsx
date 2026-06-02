@@ -167,7 +167,10 @@ export default function SchedulePage() {
                             );
                             if (prevS && prevS.class_id === s.class_id) {
                               isConnectedTop = true;
-                              if (prevS.teacher_name === s.teacher_name) {
+                              if (prevS.teacher_name === s.teacher_name &&
+                                  prevS.ta_name === s.ta_name &&
+                                  prevS.assigned_role === s.assigned_role &&
+                                  prevS.assigned_ta_role === s.assigned_ta_role) {
                                 hideTeacherName = true;
                               }
                             }

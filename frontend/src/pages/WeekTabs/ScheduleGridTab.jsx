@@ -5,9 +5,9 @@ import { Books, PushPin, ArrowsOutCardinal, FileXls, FilePdf, PencilSimple, X, D
 import { useToast } from '../../components/layout/Toast'
 
 /* ── getSessionColor Helper ────────────────────────────── */
-const getSessionColor = (session) => {
+const getSessionColor = (session, segmentRole) => {
   const classCode = session.class_code || '';
-  const role = session.assigned_role || '';
+  const role = segmentRole || session.assigned_role || '';
   const caps = session.teacher_capabilities || [];
   
   let minHue = 0;
@@ -20,12 +20,12 @@ const getSessionColor = (session) => {
     minHue = 300;
     maxHue = 350;
   } else if (role === 'lead_teacher' || caps.includes('lead_teacher')) {
-    minHue = 200;
+    minHue = 220; // nice slate blue/violet
     maxHue = 260;
   } else {
     // Default to neutral blue/gray if no teacher assigned yet
     minHue = 180;
-    maxHue = 220;
+    maxHue = 200;
   }
   
   let hash = 0;
@@ -42,6 +42,112 @@ const getSessionColor = (session) => {
     border: isPinned ? `2px solid hsla(${h}, 80%, 40%, 1)` : `1.5px solid hsla(${h}, 70%, 55%, 0.7)`,
     text: `hsla(${h}, 90%, 20%, 1)`
   };
+};
+
+const getRoleLabel = (role) => {
+  if (role === 'lead_teacher') return 'GV Chính';
+  if (role === 'foreign_teacher') return 'GV Nước ngoài';
+  if (role && role.startsWith('ta')) return 'Trợ giảng TA';
+  return 'Chưa xác định';
+};
+
+const getSegmentRoleForSession = (session, allSessions = [], timeSlots = []) => {
+  if (session.assigned_role) {
+    return session.assigned_role;
+  }
+  if (session.assigned_ta_role) {
+    return session.assigned_ta_role;
+  }
+
+  const cSegs = session.class_segments;
+  if (!cSegs) {
+    return 'lead_teacher';
+  }
+
+  const classSessions = allSessions
+    .filter(s => s.class_id === session.class_id)
+    .map(s => {
+      const ts = timeSlots.find(slot => slot.id === s.time_slot_id) || {};
+      return {
+        ...s,
+        day_of_week: ts.day_of_week || 0,
+        start_time: ts.start_time || '',
+      };
+    })
+    .sort((a, b) => {
+      if (a.day_of_week !== b.day_of_week) {
+        return a.day_of_week - b.day_of_week;
+      }
+      return a.start_time.localeCompare(b.start_time);
+    });
+
+  const index = classSessions.findIndex(s => s.id === session.id);
+  if (index === -1) return 'lead_teacher';
+
+  const blocks = [];
+  let currentBlock = [];
+  
+  classSessions.forEach((s) => {
+    if (currentBlock.length === 0) {
+      currentBlock.push(s);
+    } else {
+      const last = currentBlock[currentBlock.length - 1];
+      const prevTs = timeSlots.find(slot => slot.id === last.time_slot_id) || {};
+      const currTs = timeSlots.find(slot => slot.id === s.time_slot_id) || {};
+      const isContiguous = 
+        prevTs.day_of_week === currTs.day_of_week &&
+        last.room_id === s.room_id &&
+        prevTs.end_time === currTs.start_time;
+        
+      if (isContiguous) {
+        currentBlock.push(s);
+      } else {
+        blocks.push(currentBlock);
+        currentBlock = [s];
+      }
+    }
+  });
+  if (currentBlock.length > 0) {
+    blocks.push(currentBlock);
+  }
+
+  let blockIndex = -1;
+  let slotIndexInBlock = -1;
+  for (let bIdx = 0; bIdx < blocks.length; bIdx++) {
+    const sIdx = blocks[bIdx].findIndex(s => s.id === session.id);
+    if (sIdx !== -1) {
+      blockIndex = bIdx;
+      slotIndexInBlock = sIdx;
+      break;
+    }
+  }
+
+  if (blockIndex === -1) return 'lead_teacher';
+
+  let sessionSegs = null;
+  if (Array.isArray(cSegs) && cSegs.length > 0 && Array.isArray(cSegs[0])) {
+    sessionSegs = cSegs[blockIndex] || cSegs[0];
+  } else if (typeof cSegs === 'object' && !Array.isArray(cSegs)) {
+    sessionSegs = cSegs[blockIndex] || cSegs[String(blockIndex)] || Object.values(cSegs)[0];
+  } else if (Array.isArray(cSegs)) {
+    sessionSegs = cSegs;
+  }
+
+  if (!sessionSegs || sessionSegs.length === 0) {
+    return 'lead_teacher';
+  }
+
+  let accumulatedSlots = 0;
+  for (let seg of sessionSegs) {
+    const dur = seg.duration_minutes || 45;
+    const slotsNeeded = Math.ceil(dur / 45.0) || 1;
+    accumulatedSlots += slotsNeeded;
+    if (slotIndexInBlock < accumulatedSlots) {
+      return seg.required_capability || 'lead_teacher';
+    }
+  }
+
+  return 'lead_teacher';
 };
 
 /* ── mergeContiguousSessions Helper ────────────────────── */
@@ -72,20 +178,8 @@ const mergeContiguousSessions = (sList, timeSlots) => {
   mapped.forEach(s => {
     if (merged.length === 0) {
       merged.push({
-        id: s.id,
-        sessionIds: [s.id],
-        class_id: s.class_id,
-        class_code: s.class_code,
-        class_type: s.class_type,
-        room_id: s.room_id,
-        room_name: s.room_name,
-        person_id: s.person_id,
-        teacher_name: s.teacher_name,
-        assigned_role: s.assigned_role,
-        day_of_week: s.day_of_week,
-        start_time: s.start_time,
-        end_time: s.end_time,
-        slot_label: s.slot_label
+        ...s,
+        sessionIds: [s.id]
       });
       return;
     }
@@ -103,20 +197,8 @@ const mergeContiguousSessions = (sList, timeSlots) => {
       last.sessionIds.push(s.id);
     } else {
       merged.push({
-        id: s.id,
-        sessionIds: [s.id],
-        class_id: s.class_id,
-        class_code: s.class_code,
-        class_type: s.class_type,
-        room_id: s.room_id,
-        room_name: s.room_name,
-        person_id: s.person_id,
-        teacher_name: s.teacher_name,
-        assigned_role: s.assigned_role,
-        day_of_week: s.day_of_week,
-        start_time: s.start_time,
-        end_time: s.end_time,
-        slot_label: s.slot_label
+        ...s,
+        sessionIds: [s.id]
       });
     }
   });
@@ -282,11 +364,32 @@ function SearchableSelect({ options, value, onChange, placeholder, emptyLabel = 
 }
 
 /* ── Draggable Session Card ───────────────────────────── */
-function SessionCard({ session, isDragging, isConnectedTop, isConnectedBottom, hideTeacherName, onEdit }) {
+function SessionCard({ session, isDragging, isConnectedTop, isConnectedBottom, hideTeacherName, onEdit, allSessions = [], timeSlots = [] }) {
   const isPinned = session.is_pinned;
-  const colors = getSessionColor(session);
-  const role = session.assigned_role || '';
+  const segmentRole = getSegmentRoleForSession(session, allSessions, timeSlots);
+  const colors = getSessionColor(session, segmentRole);
 
+  let showSegmentLabel = !isConnectedTop || isDragging;
+  if (isConnectedTop && !isDragging) {
+    const currentTs = timeSlots.find(ts => ts.id === session.time_slot_id);
+    if (currentTs) {
+      const prevSession = allSessions.find(s => {
+        if (s.room_id !== session.room_id) return false;
+        const ts = timeSlots.find(t => t.id === s.time_slot_id);
+        return ts && ts.day_of_week === currentTs.day_of_week && ts.end_time === currentTs.start_time;
+      });
+      if (prevSession) {
+        const prevSegmentRole = getSegmentRoleForSession(prevSession, allSessions, timeSlots);
+        if (segmentRole !== prevSegmentRole) {
+          showSegmentLabel = true;
+        }
+      } else {
+        showSegmentLabel = true;
+      }
+    } else {
+      showSegmentLabel = true;
+    }
+  }
   const borderRadius = `${isConnectedTop ? '0' : 'var(--radius-sm)'} ${isConnectedTop ? '0' : 'var(--radius-sm)'} ${isConnectedBottom ? '0' : 'var(--radius-sm)'} ${isConnectedBottom ? '0' : 'var(--radius-sm)'}`;
   
   const borderTop = isConnectedTop ? 'none' : colors.border;
@@ -346,10 +449,17 @@ function SessionCard({ session, isDragging, isConnectedTop, isConnectedBottom, h
           </span>
         </div>
       )}
+
+      {/* Segment role label */}
+      {showSegmentLabel && (
+        <div style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase', opacity: 0.7, letterSpacing: '0.04em', marginTop: isConnectedTop ? 'auto' : '1px' }}>
+          {getRoleLabel(segmentRole)}
+        </div>
+      )}
       
-      {/* We can show teacher name on all blocks or just the top. Showing on all is fine if roles change per segment */}
+      {/* Teacher Name */}
       {(!hideTeacherName) && (
-        <div style={{ fontSize: 'var(--text-caption-sm-size)', opacity: 0.85, fontWeight: 500, display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: isConnectedTop ? 'auto' : '0' }}>
+        <div style={{ fontSize: 'var(--text-caption-sm-size)', opacity: 0.85, fontWeight: 500, display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: (isConnectedTop && !showSegmentLabel) ? 'auto' : '0' }}>
           <span>{[session.teacher_name, session.ta_name].filter(Boolean).join(' + ') || '—'}</span>
           {(() => {
             const mainRole = session.assigned_role || '';
@@ -392,7 +502,7 @@ function SessionCard({ session, isDragging, isConnectedTop, isConnectedBottom, h
   );
 }
 
-function DraggableSession({ session, isConnectedTop, isConnectedBottom, hideTeacherName, onEdit }) {
+function DraggableSession({ session, isConnectedTop, isConnectedBottom, hideTeacherName, onEdit, allSessions, timeSlots }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: session.id,
     data: session,
@@ -408,6 +518,8 @@ function DraggableSession({ session, isConnectedTop, isConnectedBottom, hideTeac
         isConnectedBottom={isConnectedBottom} 
         hideTeacherName={hideTeacherName}
         onEdit={onEdit}
+        allSessions={allSessions}
+        timeSlots={timeSlots}
       />
     </div>
   )
@@ -651,9 +763,16 @@ export default function ScheduleGridTab({ weekId }) {
     };
   });
   sessions.forEach(s => {
+    let assigned = false;
     if (s.person_id && teachersMap[s.person_id]) {
       teachersMap[s.person_id].sessions.push(s);
-    } else {
+      assigned = true;
+    }
+    if (s.ta_id && teachersMap[s.ta_id]) {
+      teachersMap[s.ta_id].sessions.push(s);
+      assigned = true;
+    }
+    if (!assigned) {
       teachersMap['unassigned'].sessions.push(s);
     }
   });
@@ -753,22 +872,22 @@ export default function ScheduleGridTab({ weekId }) {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-lg)', fontSize: 'var(--text-caption-sm-size)' }}>
               <div style={{ display: 'flex', gap: 'var(--space-lg)', flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ width: 12, height: 12, borderRadius: 2, background: 'hsla(220, 85%, 95%, 1)', border: '1.5px solid hsla(220, 70%, 55%, 0.8)' }} />
-                  GV Chính ({sessions.filter(s => {
-                    const caps = s.teacher_capabilities || [];
-                    return caps.includes('lead_teacher') && !caps.includes('foreign_teacher') && !caps.some(c => c.startsWith('ta'));
+                  <span style={{ width: 12, height: 12, borderRadius: 2, background: 'hsla(240, 85%, 95%, 1)', border: '1.5px solid hsla(240, 70%, 55%, 0.8)' }} />
+                  GV Chính ({sessions.filter(s => getSegmentRoleForSession(s, sessions, timeSlots) === 'lead_teacher').length})
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ width: 12, height: 12, borderRadius: 2, background: 'hsla(130, 85%, 95%, 1)', border: '1.5px solid hsla(130, 70%, 55%, 0.8)' }} />
+                  GV Nước ngoài ({sessions.filter(s => getSegmentRoleForSession(s, sessions, timeSlots) === 'foreign_teacher').length})
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ width: 12, height: 12, borderRadius: 2, background: 'hsla(325, 85%, 95%, 1)', border: '1.5px solid hsla(325, 70%, 55%, 0.8)' }} />
+                  Trợ giảng TA ({sessions.filter(s => {
+                    const r = getSegmentRoleForSession(s, sessions, timeSlots);
+                    return r && r.startsWith('ta');
                   }).length})
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ width: 12, height: 12, borderRadius: 2, background: 'hsla(120, 85%, 95%, 1)', border: '1.5px solid hsla(120, 70%, 55%, 0.8)' }} />
-                  GV Nước ngoài ({sessions.filter(s => (s.teacher_capabilities || []).includes('foreign_teacher')).length})
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ width: 12, height: 12, borderRadius: 2, background: 'hsla(320, 85%, 95%, 1)', border: '1.5px solid hsla(320, 70%, 55%, 0.8)' }} />
-                  Trợ giảng TA ({sessions.filter(s => (s.teacher_capabilities || []).some(c => c.startsWith('ta'))).length})
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ width: 12, height: 12, borderRadius: 2, background: 'hsla(200, 85%, 95%, 1)', border: '1.5px solid hsla(200, 70%, 55%, 0.8)' }} />
+                  <span style={{ width: 12, height: 12, borderRadius: 2, background: 'hsla(190, 85%, 95%, 1)', border: '1.5px solid hsla(190, 70%, 55%, 0.8)' }} />
                   Chưa xếp GV ({sessions.filter(s => !s.teacher_name).length})
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -851,7 +970,11 @@ export default function ScheduleGridTab({ weekId }) {
                                   );
                                   if (prevSession && prevSession.class_id === session.class_id) {
                                     isConnectedTop = true;
-                                    if (prevSession.teacher_name === session.teacher_name) {
+                                    const prevRole = getSegmentRoleForSession(prevSession, sessions, timeSlots);
+                                    const currentRole = getSegmentRoleForSession(session, sessions, timeSlots);
+                                    if (prevSession.teacher_name === session.teacher_name &&
+                                        prevSession.ta_name === session.ta_name &&
+                                        prevRole === currentRole) {
                                       hideTeacherName = true;
                                     }
                                   }
@@ -881,6 +1004,8 @@ export default function ScheduleGridTab({ weekId }) {
                                       isConnectedBottom={isConnectedBottom}
                                       hideTeacherName={hideTeacherName}
                                       onEdit={openEditAssignment}
+                                      allSessions={sessions}
+                                      timeSlots={timeSlots}
                                     />
                                   )}
                                 </DroppableCell>
@@ -1042,17 +1167,21 @@ export default function ScheduleGridTab({ weekId }) {
                                   <div style={{ fontSize: '13px', marginTop: '4px' }}>
                                     Lớp: <strong style={{ color: 'var(--color-primary-dark)' }}>{s.class_code}</strong> | Phòng: <strong>{s.room_name}</strong>
                                   </div>
-                                  {s.assigned_role && (
-                                    <div style={{ marginTop: '4px' }}>
-                                      <span style={{ fontSize: '9px', background: 'rgba(0,0,0,0.06)', padding: '1px 6px', borderRadius: '3px', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.02em' }}>
-                                        {s.assigned_role === 'lead_teacher' ? 'GV Chính' : 
-                                         s.assigned_role === 'foreign_teacher' ? 'GV Nước Ngoài' : 
-                                         s.assigned_role === 'ta_solo' ? 'TA Độc Lập' : 
-                                         s.assigned_role === 'ta_support' ? 'TA Hỗ Trợ' : 
-                                         s.assigned_role === 'ta_ielts' ? 'TA IELTS' : s.assigned_role === 'ta_kids' ? 'TA Kids' : s.assigned_role}
-                                      </span>
-                                    </div>
-                                  )}
+                                  {(() => {
+                                    const displayRole = t.id === s.ta_id ? s.assigned_ta_role : s.assigned_role;
+                                    if (!displayRole) return null;
+                                    return (
+                                      <div style={{ marginTop: '4px' }}>
+                                        <span style={{ fontSize: '9px', background: 'rgba(0,0,0,0.06)', padding: '1px 6px', borderRadius: '3px', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.02em' }}>
+                                          {displayRole === 'lead_teacher' ? 'GV Chính' : 
+                                           displayRole === 'foreign_teacher' ? 'GV Nước Ngoài' : 
+                                           displayRole === 'ta_solo' ? 'TA Độc Lập' : 
+                                           displayRole === 'ta_support' ? 'TA Hỗ Trợ' : 
+                                           displayRole === 'ta_ielts' ? 'TA IELTS' : displayRole === 'ta_kids' ? 'TA Kids' : displayRole}
+                                        </span>
+                                      </div>
+                                    );
+                                  })()}
                                 </div>
                                 <button 
                                   onClick={() => openEditAssignment(s)}
@@ -1089,7 +1218,7 @@ export default function ScheduleGridTab({ weekId }) {
 
       {/* Drag overlay — follows cursor */}
       <DragOverlay>
-        {activeSession && <SessionCard session={activeSession} isDragging hideTeacherName={false} />}
+        {activeSession && <SessionCard session={activeSession} isDragging hideTeacherName={false} allSessions={sessions} timeSlots={timeSlots} />}
       </DragOverlay>
 
       {/* Edit Assignment Modal */}
