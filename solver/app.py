@@ -1,5 +1,6 @@
 import os
 import math
+import json
 from datetime import datetime
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -18,6 +19,13 @@ def solve():
     data = request.get_json()
     if not data:
         return jsonify({"status": "error", "message": "No data provided"}), 400
+        
+    # Write payload for debugging
+    try:
+        with open('payload_from_backend.json', 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print("Failed to save payload:", e)
         
     try:
         classes = data.get('classes', [])
@@ -129,25 +137,38 @@ def solve():
         # 1. Variables & Assignments
         for c in classes:
             c_segs = c.get('segments')
-            if not c_segs:
-                c_segs = [{
-                    "label": "Phân đoạn chính",
-                    "duration_minutes": c.get('duration_minutes', 45),
-                    "required_capability": "lead_teacher_or_foreign"
-                }]
-            
-            # Calculate slots for each segment
-            seg_slots = []
-            for seg in c_segs:
-                dur = seg.get('duration_minutes', 45)
-                slots = math.ceil(dur / 45.0)
-                if slots == 0: slots = 1
-                seg_slots.append(slots)
-            
-            total_slots_needed = sum(seg_slots)
             allowed_pids = {perm['person_id'] for perm in c.get('permissions', [])}
             
             for s in range(c.get('sessions_per_week', 1)):
+                # Determine segments for this specific session s
+                session_segs = None
+                if isinstance(c_segs, dict):
+                    session_segs = c_segs.get(str(s)) or c_segs.get(s)
+                elif isinstance(c_segs, list) and len(c_segs) > 0 and isinstance(c_segs[0], list):
+                    if s < len(c_segs):
+                        session_segs = c_segs[s]
+                    else:
+                        session_segs = c_segs[0]
+                elif isinstance(c_segs, list):
+                    session_segs = c_segs
+                
+                if not session_segs:
+                    session_segs = [{
+                        "label": "Phân đoạn chính",
+                        "duration_minutes": c.get('duration_minutes', 45),
+                        "required_capability": "lead_teacher_or_foreign"
+                    }]
+                
+                # Calculate slots for each segment
+                seg_slots = []
+                for seg in session_segs:
+                    dur = seg.get('duration_minutes', 45)
+                    slots = math.ceil(dur / 45.0)
+                    if slots == 0: slots = 1
+                    seg_slots.append(slots)
+                
+                total_slots_needed = sum(seg_slots)
+                
                 for i, ts in enumerate(time_slots):
                     block_tsids = get_consecutive_slots(i, total_slots_needed)
                     if not block_tsids:
@@ -158,7 +179,7 @@ def solve():
                         seg_candidates = []
                         impossible = False
                         
-                        for seg_idx, seg in enumerate(c_segs):
+                        for seg_idx, seg in enumerate(session_segs):
                             seg_start_offset = sum(seg_slots[0:seg_idx])
                             seg_len = seg_slots[seg_idx]
                             seg_tsids = block_tsids[seg_start_offset : seg_start_offset + seg_len]
@@ -295,9 +316,21 @@ def solve():
                 if acid == cid and arid == rid:
                     c_dict = next(x for x in classes if x['id'] == acid)
                     c_segs = c_dict.get('segments')
-                    if not c_segs:
-                        c_segs = [{"duration_minutes": c_dict.get('duration_minutes', 45)}]
-                    total_slots = sum(math.ceil(seg.get('duration_minutes', 45) / 45.0) or 1 for seg in c_segs)
+                    # Determine segments for this specific session sid
+                    session_segs = None
+                    if isinstance(c_segs, dict):
+                        session_segs = c_segs.get(str(sid)) or c_segs.get(sid)
+                    elif isinstance(c_segs, list) and len(c_segs) > 0 and isinstance(c_segs[0], list):
+                        if sid < len(c_segs):
+                            session_segs = c_segs[sid]
+                        else:
+                            session_segs = c_segs[0]
+                    elif isinstance(c_segs, list):
+                        session_segs = c_segs
+                    
+                    if not session_segs:
+                        session_segs = [{"duration_minutes": c_dict.get('duration_minutes', 45)}]
+                    total_slots = sum(math.ceil(seg.get('duration_minutes', 45) / 45.0) or 1 for seg in session_segs)
                     
                     start_idx = tsid_to_idx[atsid]
                     block_tsids = get_consecutive_slots(start_idx, total_slots)
@@ -353,9 +386,22 @@ def solve():
                         if match:
                             c_dict = next(x for x in classes if x['id'] == cid)
                             c_segs = c_dict.get('segments')
-                            if not c_segs:
-                                c_segs = [{"duration_minutes": c_dict.get('duration_minutes', 45)}]
-                            total_slots = sum(math.ceil(seg.get('duration_minutes', 45) / 45.0) or 1 for seg in c_segs)
+                            
+                            # Determine segments for this specific session s
+                            session_segs = None
+                            if isinstance(c_segs, dict):
+                                session_segs = c_segs.get(str(s)) or c_segs.get(s)
+                            elif isinstance(c_segs, list) and len(c_segs) > 0 and isinstance(c_segs[0], list):
+                                if s < len(c_segs):
+                                    session_segs = c_segs[s]
+                                else:
+                                    session_segs = c_segs[0]
+                            elif isinstance(c_segs, list):
+                                session_segs = c_segs
+                            
+                            if not session_segs:
+                                session_segs = [{"duration_minutes": c_dict.get('duration_minutes', 45)}]
+                            total_slots = sum(math.ceil(seg.get('duration_minutes', 45) / 45.0) or 1 for seg in session_segs)
                             
                             start_idx = tsid_to_idx[atsid]
                             block_tsids = get_consecutive_slots(start_idx, total_slots)
@@ -366,11 +412,24 @@ def solve():
                         if apid == entity_id:
                             c_dict = next(x for x in classes if x['id'] == cid)
                             c_segs = c_dict.get('segments')
-                            if not c_segs:
-                                c_segs = [{"duration_minutes": c_dict.get('duration_minutes', 45)}]
+                            
+                            # Determine segments for this specific session s
+                            session_segs = None
+                            if isinstance(c_segs, dict):
+                                session_segs = c_segs.get(str(s)) or c_segs.get(s)
+                            elif isinstance(c_segs, list) and len(c_segs) > 0 and isinstance(c_segs[0], list):
+                                if s < len(c_segs):
+                                    session_segs = c_segs[s]
+                                else:
+                                    session_segs = c_segs[0]
+                            elif isinstance(c_segs, list):
+                                session_segs = c_segs
+                            
+                            if not session_segs:
+                                session_segs = [{"duration_minutes": c_dict.get('duration_minutes', 45)}]
                             
                             seg_slots = []
-                            for seg in c_segs:
+                            for seg in session_segs:
                                 dur = seg.get('duration_minutes', 45)
                                 slots = math.ceil(dur / 45.0)
                                 if slots == 0: slots = 1
@@ -459,9 +518,22 @@ def solve():
                             if cid in class_ids:
                                 c_dict = next(x for x in classes if x['id'] == cid)
                                 c_segs = c_dict.get('segments')
-                                if not c_segs:
-                                    c_segs = [{"duration_minutes": c_dict.get('duration_minutes', 45)}]
-                                total_slots = sum(math.ceil(seg.get('duration_minutes', 45) / 45.0) or 1 for seg in c_segs)
+                                
+                                # Determine segments for this specific session s
+                                session_segs = None
+                                if isinstance(c_segs, dict):
+                                    session_segs = c_segs.get(str(s)) or c_segs.get(s)
+                                elif isinstance(c_segs, list) and len(c_segs) > 0 and isinstance(c_segs[0], list):
+                                    if s < len(c_segs):
+                                        session_segs = c_segs[s]
+                                    else:
+                                        session_segs = c_segs[0]
+                                elif isinstance(c_segs, list):
+                                    session_segs = c_segs
+                                
+                                if not session_segs:
+                                    session_segs = [{"duration_minutes": c_dict.get('duration_minutes', 45)}]
+                                total_slots = sum(math.ceil(seg.get('duration_minutes', 45) / 45.0) or 1 for seg in session_segs)
                                 
                                 start_idx = tsid_to_idx[atsid]
                                 block_tsids = get_consecutive_slots(start_idx, total_slots)
@@ -592,12 +664,12 @@ def solve():
         for var in room_use_vars.values():
             objective_terms.append(100 * var)
 
-        # Secondary objective: minimize delay penalty (weight = 1)
+        # Secondary objective: minimize delay penalty (weight = 30)
         for (cid, s, tsid, rid), var in session_vars.items():
             ts = next(x for x in time_slots if x['id'] == tsid)
             penalty = get_slot_period_penalty(ts)
             if penalty > 0:
-                objective_terms.append(penalty * var)
+                objective_terms.append((penalty * 30) * var)
 
         model.Minimize(sum(objective_terms))
 
@@ -615,11 +687,24 @@ def solve():
                 if solver.Value(var) == 1:
                     c_dict = next(x for x in classes if x['id'] == cid)
                     c_segs = c_dict.get('segments')
-                    if not c_segs:
-                        c_segs = [{"duration_minutes": c_dict.get('duration_minutes', 45)}]
+                    
+                    # Determine segments for this specific session s
+                    session_segs = None
+                    if isinstance(c_segs, dict):
+                        session_segs = c_segs.get(str(s)) or c_segs.get(s)
+                    elif isinstance(c_segs, list) and len(c_segs) > 0 and isinstance(c_segs[0], list):
+                        if s < len(c_segs):
+                            session_segs = c_segs[s]
+                        else:
+                            session_segs = c_segs[0]
+                    elif isinstance(c_segs, list):
+                        session_segs = c_segs
+                    
+                    if not session_segs:
+                        session_segs = [{"duration_minutes": c_dict.get('duration_minutes', 45)}]
                     
                     seg_slots = []
-                    for seg in c_segs:
+                    for seg in session_segs:
                         dur = seg.get('duration_minutes', 45)
                         slots = math.ceil(dur / 45.0)
                         if slots == 0: slots = 1
@@ -634,7 +719,7 @@ def solve():
                     
                     if block_tsids:
                         seg_tsids = block_tsids[seg_start_offset : seg_start_offset + seg_len]
-                        role = c_segs[seg_idx].get('required_capability', 'lead_teacher')
+                        role = session_segs[seg_idx].get('required_capability', 'lead_teacher')
                         if not role or role == 'any':
                             role = 'lead_teacher'
                             
@@ -645,7 +730,7 @@ def solve():
                             if t_cid == cid and t_s == s and t_tsid == tsid and t_rid == rid and t_seg_idx == seg_idx:
                                 if solver.Value(t_var) == 1:
                                     ta_pid = t_pid
-                                    ta_role = c_segs[seg_idx].get('required_ta_capability')
+                                    ta_role = session_segs[seg_idx].get('required_ta_capability')
                                     break
                                     
                         for bid in seg_tsids:

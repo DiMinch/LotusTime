@@ -110,6 +110,7 @@ def main():
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = 30.0
     solver.parameters.log_search_progress = True
+    solver.parameters.cp_model_presolve = False
     status = solver.Solve(model)
 
     print("Status:", solver.StatusName(status))
