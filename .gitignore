@@ -22,3 +22,16 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 *.log
+
+# Project specific temp files
+backend/check_*.js
+backend/dump_*.js
+solver/check_*.py
+solver/inspect_*.py
+solver/print_*.py
+solver/test_*.py
+solver/solve_relaxed_special*.py
+solver/solve_single_class*.py
+solver/solve_individual_real*.py
+solver/scratch/
+solver/payload*.json
