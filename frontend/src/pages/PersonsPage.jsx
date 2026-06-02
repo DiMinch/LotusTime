@@ -6,6 +6,14 @@ import { useConfirm } from '../components/layout/ConfirmModal'
 
 const CAPABILITIES = ['lead_teacher', 'foreign_teacher', 'ta_support', 'ta_solo', 'ta_ielts', 'ta_kids']
 const CAP_LABELS = { lead_teacher: 'GV Chính', foreign_teacher: 'GV Nước ngoài', ta_support: 'TA Hỗ trợ', ta_solo: 'TA Độc lập', ta_ielts: 'TA IELTS', ta_kids: 'TA Kids' }
+const CAP_TOOLTIPS = {
+  lead_teacher: 'Giáo viên chính (Việt): Giảng dạy chính, giải thích ngữ pháp, quản lý lớp',
+  foreign_teacher: 'Giáo viên nước ngoài: Luyện nghe nói, phát âm, phản xạ giao tiếp',
+  ta_support: 'Trợ giảng hỗ trợ: Điểm danh, quản lý học sinh và hỗ trợ GV chính',
+  ta_solo: 'Trợ giảng độc lập: Có thể đứng lớp độc lập dạy ôn tập, sửa bài tập',
+  ta_ielts: 'Trợ giảng IELTS: Chuyên hỗ trợ lớp IELTS, chấm/sửa bài Writing & Speaking',
+  ta_kids: 'Trợ giảng Kids: Chuyên hỗ trợ lớp trẻ em, hoạt náo và theo sát trẻ nhỏ'
+}
 
 export default function PersonsPage() {
   const toast = useToast()
@@ -75,7 +83,7 @@ export default function PersonsPage() {
                 <td>
                   <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                     {(p.capabilities || []).map(c => (
-                      <span key={c} className={`chip ${c.startsWith('ta') ? 'chip-pink' : 'chip-green'}`}>{CAP_LABELS[c] || c}</span>
+                      <span key={c} className={`chip ${c.startsWith('ta') ? 'chip-pink' : 'chip-green'}`} data-tooltip={CAP_TOOLTIPS[c]} title={CAP_TOOLTIPS[c]}>{CAP_LABELS[c] || c}</span>
                     ))}
                   </div>
                 </td>
@@ -114,7 +122,9 @@ export default function PersonsPage() {
                 {CAPABILITIES.map(cap => (
                   <button key={cap} onClick={() => toggleCap(cap)}
                     className={`chip ${form.capabilities.includes(cap) ? 'chip-green' : 'chip-gray'}`}
-                    style={{ cursor: 'pointer', border: form.capabilities.includes(cap) ? '1px solid var(--color-primary)' : '1px solid var(--color-hairline)' }}>
+                    style={{ cursor: 'pointer', border: form.capabilities.includes(cap) ? '1px solid var(--color-primary)' : '1px solid var(--color-hairline)' }}
+                    data-tooltip={CAP_TOOLTIPS[cap]}
+                    title={CAP_TOOLTIPS[cap]}>
                     {CAP_LABELS[cap]}
                   </button>
                 ))}

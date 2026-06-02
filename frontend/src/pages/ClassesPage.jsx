@@ -22,6 +22,157 @@ const SEGMENT_ROLES = [
   { value: 'ta_kids', label: 'TA Kids' },
 ]
 
+const CAP_LABELS = {
+  lead_teacher: 'GV Chính',
+  foreign_teacher: 'GV Nước ngoài',
+  ta_support: 'TA Hỗ trợ',
+  ta_solo: 'TA Độc lập',
+  ta_ielts: 'TA IELTS',
+  ta_kids: 'TA Kids'
+}
+
+const groupPersons = (personsList) => {
+  const gvChinh = []
+  const gvNuocNgoai = []
+  const troGiang = []
+  const khac = []
+
+  personsList.forEach(p => {
+    const caps = p.capabilities || []
+    if (caps.includes('foreign_teacher')) {
+      gvNuocNgoai.push(p)
+    } else if (caps.includes('lead_teacher')) {
+      gvChinh.push(p)
+    } else if (caps.some(c => c.startsWith('ta'))) {
+      troGiang.push(p)
+    } else {
+      khac.push(p)
+    }
+  })
+
+  return [
+    { title: 'Giáo viên Việt Nam (GV Chính)', list: gvChinh },
+    { title: 'Giáo viên Nước ngoài', list: gvNuocNgoai },
+    { title: 'Trợ giảng (TA)', list: troGiang },
+    { title: 'Khác', list: khac }
+  ].filter(g => g.list.length > 0)
+}
+
+const normalizeSegments = (segments, sessionsCount, defaultDuration = 90) => {
+  if (!segments) return null;
+  
+  // If it's a flat array of segment objects:
+  if (Array.isArray(segments) && segments.length > 0 && !Array.isArray(segments[0])) {
+    const obj = {};
+    for (let i = 0; i < sessionsCount; i++) {
+      obj[i.toString()] = JSON.parse(JSON.stringify(segments));
+    }
+    return obj;
+  }
+  
+  // If it's already an array of arrays:
+  if (Array.isArray(segments)) {
+    const obj = {};
+    for (let i = 0; i < sessionsCount; i++) {
+      if (i < segments.length) {
+        obj[i.toString()] = JSON.parse(JSON.stringify(segments[i]));
+      } else {
+        // Fallback to duplicate of first session's segments
+        obj[i.toString()] = segments[0] ? JSON.parse(JSON.stringify(segments[0])) : [
+          { label: 'Phân đoạn 1', duration_minutes: defaultDuration, required_capability: 'lead_teacher' }
+        ];
+      }
+    }
+    return obj;
+  }
+  
+  // If it's an object:
+  if (typeof segments === 'object') {
+    const obj = {};
+    for (let i = 0; i < sessionsCount; i++) {
+      const key = i.toString();
+      if (segments[key]) {
+        obj[key] = JSON.parse(JSON.stringify(segments[key]));
+      } else {
+        // Fallback to duplicate of first session's segments
+        obj[key] = segments["0"] ? JSON.parse(JSON.stringify(segments["0"])) : [
+          { label: 'Phân đoạn 1', duration_minutes: defaultDuration, required_capability: 'lead_teacher' }
+        ];
+      }
+    }
+    return obj;
+  }
+  
+  return null;
+}
+
+const getClassDurationString = (c) => {
+  if (!c.segments) return `${c.duration_minutes} phút`;
+  
+  // If c.segments is a flat array, they all have the same duration
+  if (Array.isArray(c.segments) && c.segments.length > 0 && !Array.isArray(c.segments[0])) {
+    const total = c.segments.reduce((sum, s) => sum + (parseInt(s.duration_minutes) || 0), 0)
+    return `${total} phút`;
+  }
+  
+  // If it's an array of arrays or an object
+  const durs = [];
+  for (let i = 0; i < c.sessions_per_week; i++) {
+    let sessionSegs = [];
+    if (Array.isArray(c.segments)) {
+      sessionSegs = c.segments[i] || c.segments[0] || [];
+    } else if (typeof c.segments === 'object') {
+      sessionSegs = c.segments[i.toString()] || c.segments["0"] || [];
+    }
+    const total = sessionSegs.reduce((sum, s) => sum + (parseInt(s.duration_minutes) || 0), 0);
+    durs.push(total);
+  }
+  
+  const allEqual = durs.every(v => v === durs[0]);
+  if (allEqual) {
+    return `${durs[0]} phút`;
+  }
+  
+  return durs.map(d => `${d}m`).join(' | ');
+}
+
+const hasSegments = (c) => {
+  if (!c.segments) return false;
+  if (Array.isArray(c.segments)) return c.segments.length > 0;
+  if (typeof c.segments === 'object') {
+    return Object.values(c.segments).some(segs => Array.isArray(segs) && segs.length > 0);
+  }
+  return false;
+}
+
+const getSegmentsCount = (c) => {
+  if (!c.segments) return 0;
+  if (Array.isArray(c.segments) && c.segments.length > 0 && !Array.isArray(c.segments[0])) {
+    return c.segments.length;
+  }
+  if (Array.isArray(c.segments)) {
+    return c.segments.reduce((acc, list) => acc + (Array.isArray(list) ? list.length : 0), 0);
+  }
+  if (typeof c.segments === 'object') {
+    return Object.values(c.segments).reduce((acc, list) => acc + (Array.isArray(list) ? list.length : 0), 0);
+  }
+  return 0;
+}
+
+const needsTA = (c) => {
+  if (!c.segments) return false;
+  if (Array.isArray(c.segments) && c.segments.length > 0 && !Array.isArray(c.segments[0])) {
+    return c.segments.some(seg => seg.required_ta_capability);
+  }
+  if (Array.isArray(c.segments)) {
+    return c.segments.some(list => Array.isArray(list) && list.some(seg => seg.required_ta_capability));
+  }
+  if (typeof c.segments === 'object') {
+    return Object.values(c.segments).some(list => Array.isArray(list) && list.some(seg => seg.required_ta_capability));
+  }
+  return false;
+}
+
 const EMPTY_FORM = {
   code: '', class_type: 'regular', level: '', student_count: '',
   sessions_per_week: 2, duration_minutes: 90, notes: '',
@@ -35,6 +186,7 @@ export default function ClassesPage() {
   const [showModal, setShowModal] = useState(false)
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState({ ...EMPTY_FORM })
+  const [activeSessionTab, setActiveSessionTab] = useState("0")
 
   const [persons, setPersons] = useState([])
 
@@ -47,19 +199,22 @@ export default function ClassesPage() {
   const openCreate = () => {
     setEditing(null)
     setForm({ ...EMPTY_FORM })
+    setActiveSessionTab("0")
     setShowModal(true)
   }
   const openEdit = (c) => {
     setEditing(c)
+    const normalized = normalizeSegments(c.segments, c.sessions_per_week, c.duration_minutes)
     setForm({
       code: c.code, class_type: c.class_type, level: c.level || '',
       student_count: c.student_count || '',
       sessions_per_week: c.sessions_per_week, duration_minutes: c.duration_minutes,
       notes: c.notes || '',
-      segments: c.segments || null,
+      segments: normalized,
       allowed_persons: c.permissions ? c.permissions.map(p => p.person_id) : [],
       allow_same_day: !!c.allow_same_day
     })
+    setActiveSessionTab("0")
     setShowModal(true)
   }
 
@@ -73,7 +228,7 @@ export default function ClassesPage() {
       sessions_per_week: parseInt(form.sessions_per_week),
       duration_minutes: parseInt(form.duration_minutes),
       student_count: form.student_count ? parseInt(form.student_count) : null,
-      segments: form.segments && form.segments.length > 0 ? form.segments : null
+      segments: form.segments ? form.segments : null
     }
     try {
       let savedClassId;
@@ -110,13 +265,16 @@ export default function ClassesPage() {
   // --- Segments helpers ---
   const enableSegments = () => {
     const dur = parseInt(form.duration_minutes) || 90
-    setForm(f => ({
-      ...f,
-      segments: [
+    const sessionsCount = parseInt(form.sessions_per_week) || 1
+    const initialSegments = {}
+    for (let i = 0; i < sessionsCount; i++) {
+      initialSegments[i.toString()] = [
         { label: 'Phân đoạn 1', duration_minutes: Math.floor(dur / 2), required_capability: 'lead_teacher' },
         { label: 'Phân đoạn 2', duration_minutes: Math.ceil(dur / 2), required_capability: 'foreign_teacher' },
       ]
-    }))
+    }
+    setForm(f => ({ ...f, segments: initialSegments }))
+    setActiveSessionTab("0")
   }
 
   const disableSegments = () => {
@@ -125,28 +283,84 @@ export default function ClassesPage() {
 
   const updateSegment = (idx, key, value) => {
     setForm(f => {
-      const segs = [...f.segments]
-      segs[idx] = { ...segs[idx], [key]: value }
-      return { ...f, segments: segs }
+      const sessionKey = activeSessionTab
+      const currentSegs = [...(f.segments[sessionKey] || [])]
+      currentSegs[idx] = { ...currentSegs[idx], [key]: value }
+      return {
+        ...f,
+        segments: {
+          ...f.segments,
+          [sessionKey]: currentSegs
+        }
+      }
     })
   }
 
   const addSegment = () => {
-    setForm(f => ({
-      ...f,
-      segments: [...(f.segments || []), { label: `Phân đoạn ${(f.segments?.length || 0) + 1}`, duration_minutes: 60, required_capability: '' }]
-    }))
+    setForm(f => {
+      const sessionKey = activeSessionTab
+      const currentSegs = [...(f.segments[sessionKey] || [])]
+      currentSegs.push({
+        label: `Phân đoạn ${currentSegs.length + 1}`,
+        duration_minutes: 45,
+        required_capability: 'lead_teacher'
+      })
+      return {
+        ...f,
+        segments: {
+          ...f.segments,
+          [sessionKey]: currentSegs
+        }
+      }
+    })
   }
 
   const removeSegment = (idx) => {
     setForm(f => {
-      const segs = f.segments.filter((_, i) => i !== idx)
-      return { ...f, segments: segs.length > 0 ? segs : null }
+      const sessionKey = activeSessionTab
+      const currentSegs = (f.segments[sessionKey] || []).filter((_, i) => i !== idx)
+      return {
+        ...f,
+        segments: {
+          ...f.segments,
+          [sessionKey]: currentSegs
+        }
+      }
     })
   }
 
-  // Auto-calc total duration from segments
-  const segmentTotal = form.segments ? form.segments.reduce((sum, s) => sum + (parseInt(s.duration_minutes) || 0), 0) : 0
+  const handleSessionsPerWeekChange = (newVal) => {
+    const val = parseInt(newVal) || 1
+    setForm(f => {
+      let updatedSegments = f.segments
+      if (f.segments) {
+        updatedSegments = {}
+        for (let i = 0; i < val; i++) {
+          const key = i.toString()
+          if (f.segments[key]) {
+            updatedSegments[key] = f.segments[key]
+          } else {
+            updatedSegments[key] = f.segments["0"] ? JSON.parse(JSON.stringify(f.segments["0"])) : [
+              { label: 'Phân đoạn 1', duration_minutes: 45, required_capability: 'lead_teacher' }
+            ]
+          }
+        }
+      }
+      return {
+        ...f,
+        sessions_per_week: val,
+        segments: updatedSegments
+      }
+    })
+    
+    setActiveSessionTab(prev => {
+      const idx = parseInt(prev)
+      if (idx >= val) {
+        return (val - 1).toString()
+      }
+      return prev
+    })
+  }
 
   return (
     <div>
@@ -187,14 +401,14 @@ export default function ClassesPage() {
                 <td>{c.level || '—'}</td>
                 <td>{c.student_count || '—'}</td>
                 <td>{c.sessions_per_week}</td>
-                <td>{c.duration_minutes} phút</td>
+                <td>{getClassDurationString(c)}</td>
                 <td>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    {c.segments && c.segments.length > 0
+                    {hasSegments(c)
                       ? (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                            <span className="chip chip-pink" style={{ fontSize: '10px' }}>{c.segments.length} phân đoạn</span>
-                            {c.segments.some(seg => seg.required_ta_capability) && (
+                            <span className="chip chip-pink" style={{ fontSize: '10px' }}>{getSegmentsCount(c)} phân đoạn</span>
+                            {needsTA(c) && (
                               <span className="chip chip-pink" style={{ fontSize: '10px' }}>Cần TA</span>
                             )}
                           </div>
@@ -253,20 +467,19 @@ export default function ClassesPage() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-md)' }}>
               <div className="form-group">
                 <label className="form-label">Số buổi/tuần</label>
-                <input className="text-input" type="number" value={form.sessions_per_week} onChange={e => setForm(f => ({ ...f, sessions_per_week: e.target.value }))} />
+                <input className="text-input" type="number" min="1" max="7" value={form.sessions_per_week} onChange={e => handleSessionsPerWeekChange(e.target.value)} />
               </div>
               <div className="form-group">
-                <label className="form-label">Tổng thời lượng/buổi (phút)</label>
-                <input className="text-input" type="number" value={form.segments ? segmentTotal : form.duration_minutes}
+                <label className="form-label">Thời lượng buổi (phút)</label>
+                <input className="text-input" type="number" 
+                  value={form.segments ? (form.segments[activeSessionTab]?.reduce((acc, s) => acc + (s.duration_minutes || 0), 0) || 0) : form.duration_minutes}
                   disabled={!!form.segments}
                   onChange={e => setForm(f => ({ ...f, duration_minutes: e.target.value }))}
                   style={form.segments ? { opacity: 0.5 } : {}}
                 />
-                {form.segments && <p style={{ fontSize: 'var(--text-caption-sm-size)', color: 'var(--color-mute)', marginTop: 2 }}>Tự tính từ tổng phân đoạn</p>}
+                {form.segments && <p style={{ fontSize: 'var(--text-caption-sm-size)', color: 'var(--color-mute)', marginTop: 2 }}>Tự tính từ phân đoạn của Buổi {parseInt(activeSessionTab) + 1}</p>}
               </div>
             </div>
-
-
 
             <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', marginTop: '-8px', marginBottom: 'var(--space-md)' }}>
               <input type="checkbox" id="allow_same_day" checked={form.allow_same_day} onChange={e => setForm(f => ({ ...f, allow_same_day: e.target.checked }))} />
@@ -275,7 +488,7 @@ export default function ClassesPage() {
 
             {/* Segments Editor */}
             <div style={{ border: '1px solid var(--color-hairline)', borderRadius: 'var(--radius-sm)', padding: 'var(--space-md)', marginBottom: 'var(--space-md)', background: 'var(--color-surface-soft)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-md)' }}>
+              <div style={{ display: 'flex', justifycontent: 'space-between', alignitems: 'center', marginBottom: 'var(--space-md)', justifyContent: 'space-between' }}>
                 <label className="form-label" style={{ marginBottom: 0, fontWeight: 700 }}>Phân đoạn buổi học</label>
                 {!form.segments
                   ? <button className="btn-outline btn-sm" type="button" onClick={enableSegments}><ListPlus size={16} style={{ marginRight: 4 }} /> Bật phân đoạn</button>
@@ -285,12 +498,32 @@ export default function ClassesPage() {
 
               {!form.segments ? (
                 <p style={{ fontSize: 'var(--text-caption-sm-size)', color: 'var(--color-mute)' }}>
-                  Mặc định: 1 buổi = 1 GV duy nhất.<br />
-                  Bật phân đoạn nếu buổi học gồm nhiều phần với GV khác nhau (VD: 1h GV Việt + 1h GV nước ngoài).
+                  Mặc định: Các buổi trong tuần có cấu trúc và thời lượng giống nhau (1 GV chính).<br />
+                  Bật phân đoạn nếu bạn muốn <b>tùy chỉnh thời lượng hoặc giáo viên khác nhau cho từng buổi trong tuần</b>.
                 </p>
               ) : (
                 <div>
-                  {form.segments.map((seg, idx) => (
+                  {/* Session Tabs */}
+                  <div style={{ display: 'flex', gap: '4px', borderBottom: '1px solid var(--color-hairline)', paddingBottom: '8px', marginBottom: '12px', overflowX: 'auto' }}>
+                    {Array.from({ length: parseInt(form.sessions_per_week) || 1 }).map((_, i) => {
+                      const key = i.toString()
+                      const isActive = activeSessionTab === key
+                      const segs = form.segments[key] || []
+                      const totalDur = segs.reduce((acc, s) => acc + (s.duration_minutes || 0), 0)
+                      
+                      return (
+                        <button key={key} type="button" onClick={() => setActiveSessionTab(key)}
+                          className={isActive ? "btn-primary btn-sm" : "btn-outline btn-sm"}
+                          style={{ whiteSpace: 'nowrap', borderRadius: '4px', fontSize: '11px', padding: '4px 8px' }}
+                        >
+                          Buổi {i + 1} ({totalDur} phút)
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  {/* Render segments for active session */}
+                  {(form.segments[activeSessionTab] || []).map((seg, idx) => (
                     <div key={idx} style={{ display: 'flex', flexDirection: 'column', gap: '8px', border: '1px dashed var(--color-hairline)', padding: '12px', borderRadius: '4px', marginBottom: '12px', background: 'var(--color-surface)' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span style={{ fontWeight: 600, fontSize: '12px', color: 'var(--color-primary-dark)' }}>{seg.label || `Phân đoạn ${idx + 1}`}</span>
@@ -360,25 +593,41 @@ export default function ClassesPage() {
               <p style={{ fontSize: 'var(--text-caption-sm-size)', color: 'var(--color-mute)', marginBottom: 'var(--space-xs)' }}>
                 Nếu để trống, AI sẽ tự do xếp bất kỳ ai có kỹ năng phù hợp. Nếu đánh dấu, <b>CHỈ</b> những người này mới được xếp vào lớp.
               </p>
-              <div style={{ border: '1px solid var(--color-hairline)', borderRadius: 'var(--radius-sm)', padding: 'var(--space-sm)', maxHeight: 150, overflowY: 'auto', display: 'grid', gridTemplateColumns: '1fr 1fr', background: 'var(--color-surface)' }}>
-                {persons.map(p => (
-                  <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 4, cursor: 'pointer' }}>
-                    <input 
-                      type="checkbox" 
-                      style={{ accentColor: 'var(--color-primary)' }}
-                      checked={form.allowed_persons.includes(p.id)}
-                      onChange={e => {
-                        const checked = e.target.checked
-                        setForm(f => ({
-                          ...f,
-                          allowed_persons: checked 
-                            ? [...f.allowed_persons, p.id]
-                            : f.allowed_persons.filter(id => id !== p.id)
-                        }))
-                      }}
-                    />
-                    <span style={{ fontSize: 'var(--text-body-sm-size)' }}>{p.short_name} <span style={{ color: 'var(--color-mute)' }}>({p.capabilities?.length || 0} skills)</span></span>
-                  </label>
+              <div style={{ border: '1px solid var(--color-hairline)', borderRadius: 'var(--radius-sm)', padding: 'var(--space-sm)', maxHeight: 220, overflowY: 'auto', background: 'var(--color-surface)' }}>
+                {groupPersons(persons).map(group => (
+                  <div key={group.title} style={{ marginBottom: '12px' }}>
+                    <div style={{ fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', color: 'var(--color-primary-dark)', borderBottom: '1px solid var(--color-hairline)', paddingBottom: '2px', marginBottom: '8px', marginTop: '4px' }}>
+                      {group.title}
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                      {group.list.map(p => (
+                        <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 4px', cursor: 'pointer' }}>
+                          <input 
+                            type="checkbox" 
+                            style={{ accentColor: 'var(--color-primary)' }}
+                            checked={form.allowed_persons.includes(p.id)}
+                            onChange={e => {
+                              const checked = e.target.checked
+                              setForm(f => ({
+                                ...f,
+                                allowed_persons: checked 
+                                  ? [...f.allowed_persons, p.id]
+                                  : f.allowed_persons.filter(id => id !== p.id)
+                              }))
+                            }}
+                          />
+                          <span style={{ fontSize: 'var(--text-body-sm-size)' }}>
+                            {p.short_name}{' '}
+                            <span style={{ color: 'var(--color-mute)', fontSize: '11px' }}>
+                              ({p.capabilities && p.capabilities.length > 0 
+                                ? p.capabilities.map(c => CAP_LABELS[c] || c).join(', ') 
+                                : 'Không có năng lực'})
+                            </span>
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
                 ))}
               </div>
             </div>

@@ -9,7 +9,6 @@ const DAYS = [
   { value: 6, label: 'Thứ 6' }, { value: 7, label: 'Thứ 7' },
   { value: 8, label: 'Chủ nhật' },
 ]
-
 export default function AvailabilityTab({ weekId }) {
   const toast = useToast()
   const [persons, setPersons] = useState([])
@@ -18,18 +17,33 @@ export default function AvailabilityTab({ weekId }) {
   const [selectedPersonId, setSelectedPersonId] = useState(null)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [previousWeekId, setPreviousWeekId] = useState(null)
+  const [copying, setCopying] = useState(false)
 
-  useEffect(() => {
+  const loadData = () => {
     Promise.all([
       api.getPersons(),
       api.getTimeSlots(),
-      api.getAvailability(weekId)
-    ]).then(([p, t, a]) => {
+      api.getAvailability(weekId),
+      api.getWeeks()
+    ]).then(([p, t, a, weeks]) => {
       setPersons(p)
       setTimeSlots(t)
       setAvailabilities(a.map(x => ({ person_id: x.person_id, time_slot_id: x.time_slot_id })))
-      if (p.length > 0) setSelectedPersonId(p[0].id)
+      if (p.length > 0) setSelectedPersonId(prev => prev || p[0].id)
+
+      if (weeks && weeks.length > 0) {
+        const sorted = [...weeks].sort((x, y) => new Date(x.week_start) - new Date(y.week_start))
+        const currentIdx = sorted.findIndex(w => w.id === weekId)
+        if (currentIdx > 0) {
+          setPreviousWeekId(sorted[currentIdx - 1].id)
+        }
+      }
     }).catch(console.error)
+  }
+
+  useEffect(() => {
+    loadData()
   }, [weekId])
 
   const toggleSlot = (slotId) => {
@@ -67,6 +81,23 @@ export default function AvailabilityTab({ weekId }) {
       toast.error('Lỗi khi lưu: ' + err.message)
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleCopyFromPrevious = async () => {
+    if (!previousWeekId) {
+      toast.error('Không tìm thấy tuần trước đó để copy!')
+      return
+    }
+    setCopying(true)
+    try {
+      await api.copyAvailability(weekId, previousWeekId)
+      toast.success('Đã copy thành công lịch rảnh từ tuần trước!')
+      loadData()
+    } catch (err) {
+      toast.error('Lỗi khi copy: ' + err.message)
+    } finally {
+      setCopying(false)
     }
   }
 
@@ -136,8 +167,9 @@ export default function AvailabilityTab({ weekId }) {
             )}
           </div>
           <div style={{ display: 'flex', gap: 'var(--space-sm)' }}>
-            <button className="btn-outline">
-              <Copy size={18} style={{ marginRight: 8 }} /> Copy từ tuần trước
+            <button className="btn-outline" onClick={handleCopyFromPrevious} disabled={copying || !previousWeekId}>
+              <Copy size={18} style={{ marginRight: 8 }} />
+              {copying ? 'Đang copy...' : 'Copy từ tuần trước'}
             </button>
             <button className="btn-primary" onClick={handleSave} disabled={saving}>
               {saved ? <Check size={18} weight="bold" style={{ marginRight: 8 }} /> : <FloppyDisk size={18} weight="bold" style={{ marginRight: 8 }} />}
