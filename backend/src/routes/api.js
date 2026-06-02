@@ -68,6 +68,38 @@ router.patch('/sessions/:id/move', async (req, res, next) => {
   try {
     const { time_slot_id, room_id } = req.body;
     const db = require('../db/pool');
+    
+    // 1. Get week_id of the session
+    const { rows: sessRows } = await db.query(
+      `SELECT week_id FROM sessions WHERE id = $1`, [req.params.id]
+    );
+    if (sessRows.length === 0) return res.status(404).json({ error: 'Session not found' });
+    const week_id = sessRows[0].week_id;
+
+    // 2. Check room conflict
+    const { rows: roomConflicts } = await db.query(
+      `SELECT id FROM sessions WHERE week_id = $1 AND time_slot_id = $2 AND room_id = $3 AND id != $4`,
+      [week_id, time_slot_id, room_id, req.params.id]
+    );
+    if (roomConflicts.length > 0) return res.status(400).json({ error: 'Phòng học này đã có lớp khác xếp vào giờ này!' });
+
+    // 3. Check teacher double booking
+    const { rows: doubleBookings } = await db.query(
+      `SELECT p.short_name
+       FROM session_assignments sa
+       JOIN sessions s ON s.id = sa.session_id
+       JOIN persons p ON p.id = sa.person_id
+       WHERE s.week_id = $1 AND s.time_slot_id = $2 AND s.id != $3
+         AND sa.person_id IN (
+           SELECT person_id FROM session_assignments WHERE session_id = $3
+         )`,
+      [week_id, time_slot_id, req.params.id]
+    );
+    if (doubleBookings.length > 0) {
+      const names = doubleBookings.map(r => r.short_name).join(', ');
+      return res.status(400).json({ error: `Giáo viên ${names} đã có lịch dạy vào giờ này!` });
+    }
+
     const { rows } = await db.query(
       `UPDATE sessions SET time_slot_id=$1, room_id=$2 WHERE id=$3 AND is_pinned=false RETURNING *`,
       [time_slot_id, room_id, req.params.id]
@@ -79,39 +111,70 @@ router.patch('/sessions/:id/move', async (req, res, next) => {
 
 // Update Session Assignment (Teacher assignment)
 router.put('/sessions/:id/assignment', async (req, res, next) => {
+  let client;
   try {
     const { person_id, role, ta_id, ta_role } = req.body;
     const db = require('../db/pool');
+
+    if (person_id && ta_id && person_id === ta_id) {
+       return res.status(400).json({ error: 'Một người không thể vừa làm GV chính vừa làm TA trong cùng 1 tiết!' });
+    }
     
-    await db.query('BEGIN');
-    await db.query('DELETE FROM session_assignments WHERE session_id = $1', [req.params.id]);
+    const { rows: sessRows } = await db.query(
+      `SELECT week_id, time_slot_id FROM sessions WHERE id = $1`, [req.params.id]
+    );
+    if (sessRows.length === 0) return res.status(404).json({ error: 'Session not found' });
+    const { week_id, time_slot_id } = sessRows[0];
+
+    if (person_id) {
+      const { rows: doubleBookings } = await db.query(
+        `SELECT s.id FROM session_assignments sa
+         JOIN sessions s ON s.id = sa.session_id
+         WHERE s.week_id = $1 AND s.time_slot_id = $2 AND s.id != $3 AND sa.person_id = $4`,
+        [week_id, time_slot_id, req.params.id, person_id]
+      );
+      if (doubleBookings.length > 0) return res.status(400).json({ error: 'Giáo viên chính này đã có lịch dạy vào giờ này!' });
+    }
+
+    if (ta_id) {
+      const { rows: doubleBookings } = await db.query(
+        `SELECT s.id FROM session_assignments sa
+         JOIN sessions s ON s.id = sa.session_id
+         WHERE s.week_id = $1 AND s.time_slot_id = $2 AND s.id != $3 AND sa.person_id = $4`,
+        [week_id, time_slot_id, req.params.id, ta_id]
+      );
+      if (doubleBookings.length > 0) return res.status(400).json({ error: 'Trợ giảng (TA) này đã có lịch dạy vào giờ này!' });
+    }
+
+    client = await db.pool.connect();
+    await client.query('BEGIN');
+    await client.query('DELETE FROM session_assignments WHERE session_id = $1', [req.params.id]);
     
     const results = [];
     if (person_id) {
-      const { rows } = await db.query(
+      const { rows } = await client.query(
         `INSERT INTO session_assignments (session_id, person_id, role)
-         VALUES ($1, $2, $3)
-         RETURNING *`,
+         VALUES ($1, $2, $3) RETURNING *`,
         [req.params.id, person_id, role || 'lead_teacher']
       );
       results.push(rows[0]);
     }
     if (ta_id) {
-      const { rows } = await db.query(
+      const { rows } = await client.query(
         `INSERT INTO session_assignments (session_id, person_id, role)
-         VALUES ($1, $2, $3)
-         RETURNING *`,
+         VALUES ($1, $2, $3) RETURNING *`,
         [req.params.id, ta_id, ta_role || 'ta_support']
       );
       results.push(rows[0]);
     }
     
-    await db.query('COMMIT');
+    await client.query('COMMIT');
     res.json({ success: true, assignments: results });
   } catch (err) {
-    const db = require('../db/pool');
-    try { await db.query('ROLLBACK'); } catch (_) {}
+    if (client) try { await client.query('ROLLBACK'); } catch (_) {}
     next(err);
+  } finally {
+    if (client) client.release();
   }
 });
 

@@ -3,7 +3,7 @@ const db = require('../db/pool');
 module.exports = {
   async findByWeek(weekId) {
     const { rows } = await db.query(`
-      SELECT s.*, c.code as class_code, c.class_type, r.name as room_name, ts.label as slot_label,
+      SELECT s.*, c.code as class_code, c.class_type, c.segments as class_segments, r.name as room_name, ts.label as slot_label,
              -- Main teacher (lead_teacher, foreign_teacher, ta_solo)
              (SELECT p.short_name FROM session_assignments sa JOIN persons p ON p.id = sa.person_id 
               WHERE sa.session_id = s.id AND sa.role IN ('lead_teacher', 'foreign_teacher', 'ta_solo') LIMIT 1) as teacher_name,
