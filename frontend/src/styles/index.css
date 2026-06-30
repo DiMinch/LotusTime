@@ -101,6 +101,30 @@ button {
   transform: scale(0.98);
 }
 
+/* Secondary Button */
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--color-surface-soft);
+  color: var(--color-body);
+  font-size: var(--text-button-md-size);
+  font-weight: var(--text-button-md-weight);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-sm);
+  padding: 11px 24px;
+  height: 44px;
+  transition: all 0.2s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.btn-secondary:hover {
+  background-color: var(--color-hairline);
+}
+
+.btn-secondary:active {
+  transform: scale(0.98);
+}
+
 /* Form Inputs */
 .text-input {
   background-color: var(--color-canvas);

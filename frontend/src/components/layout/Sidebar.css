@@ -51,6 +51,24 @@
   overflow-y: auto;
 }
 
+/* Custom scrollbar for sidebar-nav to match design system */
+.sidebar-nav::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar-nav::-webkit-scrollbar-track {
+  background: var(--color-surface-dark);
+}
+
+.sidebar-nav::-webkit-scrollbar-thumb {
+  background: var(--color-hairline-strong);
+  border-radius: var(--radius-sm);
+}
+
+.sidebar-nav::-webkit-scrollbar-thumb:hover {
+  background: var(--color-primary);
+}
+
 .sidebar-link {
   display: flex;
   align-items: center;
