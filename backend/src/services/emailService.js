@@ -39,7 +39,8 @@ async function getTransporter() {
 
 async function sendResetPasswordEmail(email, username, resetToken) {
   const client = await getTransporter();
-  const resetLink = `http://localhost:5173/reset-password?token=${resetToken}`;
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+  const resetLink = `${frontendUrl}/reset-password?token=${resetToken}`;
   
   const from = process.env.SMTP_FROM || 'LotusTime <no-reply@yourdomain.com>';
   
@@ -77,7 +78,8 @@ async function sendResetPasswordEmail(email, username, resetToken) {
 
 async function sendAccountCredentialsEmail(email, username, password) {
   const client = await getTransporter();
-  const loginLink = `http://localhost:5173/login`;
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+  const loginLink = `${frontendUrl}/login`;
   
   const from = process.env.SMTP_FROM || 'LotusTime <no-reply@yourdomain.com>';
   
