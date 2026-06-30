@@ -3,7 +3,7 @@ name: Deploy Backend to Cloud Run
 on:
   push:
     branches:
-      - master
+      - main
 
 env:
   PROJECT_ID: lotustime
