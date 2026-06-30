@@ -1,6 +1,12 @@
 const express = require('express');
 const router = express.Router();
 
+const { authenticateToken, requireRole } = require('../middlewares/authMiddleware');
+
+const authRouter = require('./auth');
+const usersRouter = require('./users');
+const profileRouter = require('./profile');
+
 const persons = require('../controllers/personsController');
 const rooms = require('../controllers/roomsController');
 const classes = require('../controllers/classesController');
@@ -9,7 +15,46 @@ const weeks = require('../controllers/weeksController');
 const availability = require('../controllers/availabilitiesController');
 const constraints = require('../controllers/constraintsController');
 const sessions = require('../controllers/sessionsController');
+const attendance = require('../controllers/attendanceController');
 
+// 1. Public Auth Router
+router.use('/auth', authRouter);
+
+// 2. Authentication Barrier for all subsequent routes
+router.use(authenticateToken);
+
+// 3. User Self Profile Router (Accessible by admin & staff)
+router.use('/profile', profileRouter);
+
+// 3.1. TA Attendance & Claims Routes (Accessible by staff & admin)
+router.get('/attendance/branches', attendance.getBranches);
+router.get('/attendance/status', attendance.getStatus);
+router.post('/attendance/scan', attendance.scanQR);
+router.post('/attendance/declare', attendance.declareSessions);
+router.post('/attendance/claim', attendance.submitClaim);
+router.get('/attendance/my-logs', attendance.getMyLogs);
+
+// 4. Role Barrier: Restrict all subsequent routes to admins only
+router.use(requireRole('admin'));
+
+// 5. Admin User Management Router
+router.use('/admin/users', usersRouter);
+
+// 5.1. Admin Attendance & Payroll Management Routes
+router.get('/attendance/admin/qr', attendance.generateQR);
+router.get('/attendance/admin/pending', attendance.adminGetPending);
+router.post('/attendance/admin/approve-session/:id', attendance.adminApproveSession);
+router.get('/attendance/admin/claims', attendance.adminGetClaims);
+router.post('/attendance/admin/resolve-claim/:id', attendance.adminResolveClaim);
+router.get('/attendance/admin/payroll', attendance.adminGetPayroll);
+
+// Branches CRUD
+router.get('/attendance/admin/branches', attendance.adminListBranches);
+router.post('/attendance/admin/branches', attendance.adminCreateBranch);
+router.put('/attendance/admin/branches/:id', attendance.adminUpdateBranch);
+router.delete('/attendance/admin/branches/:id', attendance.adminDeleteBranch);
+
+// 6. Admin Timetabling & Database Routes
 // Persons
 router.get('/persons', persons.list);
 router.get('/persons/:id', persons.get);
@@ -18,6 +63,7 @@ router.put('/persons/:id', persons.update);
 router.delete('/persons/:id', persons.remove);
 router.put('/persons/:id/capabilities', persons.setCapabilities);
 router.put('/persons/:id/permissions', persons.setPermissions);
+router.post('/persons/:id/reset-password', persons.resetPassword);
 
 // Rooms
 router.get('/rooms', rooms.list);

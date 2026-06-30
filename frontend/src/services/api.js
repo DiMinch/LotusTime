@@ -1,19 +1,98 @@
 const BASE = '/api';
 
+let accessToken = null;
+
+export const setAccessToken = (token) => {
+  accessToken = token;
+};
+
+export const getAccessToken = () => {
+  return accessToken;
+};
+
+const getDeviceId = () => {
+  let id = localStorage.getItem('lotustime_device_id');
+  if (!id) {
+    id = Math.random().toString(36).substring(2) + Date.now().toString(36);
+    localStorage.setItem('lotustime_device_id', id);
+  }
+  return id;
+};
+
+const getDeviceFingerprint = () => {
+  const ua = navigator.userAgent;
+  const screenWidth = window.screen.width;
+  const screenHeight = window.screen.height;
+  const language = navigator.language;
+  const platform = navigator.platform || '';
+  const str = `${ua}|${screenWidth}x${screenHeight}|${language}|${platform}`;
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = (hash << 5) - hash + char;
+    hash |= 0;
+  }
+  return 'fp_' + Math.abs(hash).toString(16);
+};
+
 async function request(url, options = {}) {
-  const res = await fetch(`${BASE}${url}`, {
-    headers: { 'Content-Type': 'application/json' },
+  const headers = {
+    'Content-Type': 'application/json',
+    'x-device-id': getDeviceId(),
+    'x-device-fingerprint': getDeviceFingerprint(),
+    ...options.headers,
+  };
+
+  if (accessToken) {
+    headers['Authorization'] = `Bearer ${accessToken}`;
+  }
+
+  let res = await fetch(`${BASE}${url}`, {
     ...options,
+    headers,
     body: options.body ? JSON.stringify(options.body) : undefined,
   });
+
+  // If unauthorized and we have an access token, try refreshing
+  if (res.status === 401 && accessToken) {
+    try {
+      const refreshRes = await fetch(`${BASE}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      if (refreshRes.ok) {
+        const data = await refreshRes.json();
+        accessToken = data.accessToken;
+        
+        // Retry original request with new token
+        headers['Authorization'] = `Bearer ${accessToken}`;
+        res = await fetch(`${BASE}${url}`, {
+          ...options,
+          headers,
+          body: options.body ? JSON.stringify(options.body) : undefined,
+        });
+      } else {
+        accessToken = null;
+        window.dispatchEvent(new CustomEvent('auth-logout', { detail: { reason: 'session_expired' } }));
+      }
+    } catch (err) {
+      accessToken = null;
+      window.dispatchEvent(new CustomEvent('auth-logout', { detail: { reason: 'network_error' } }));
+    }
+  }
+
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.message || err.error || 'API Error');
+    const errorObj = new Error(err.message || err.error || 'API Error');
+    errorObj.response = err;
+    errorObj.status = res.status;
+    throw errorObj;
   }
-  return res.json();
+
+  const text = await res.text();
+  return text ? JSON.parse(text) : {};
 }
 
-// Dùng riêng cho các endpoint trả về file binary (Excel, PDF)
 // Dùng riêng cho các endpoint trả về file binary (Excel, PDF)
 async function download(url, fallbackFilename) {
   try {
@@ -31,6 +110,57 @@ async function download(url, fallbackFilename) {
 }
 
 export const api = {
+  // Authentication
+  getConfig: () =>
+    request('/auth/config'),
+
+  login: (username, password, rememberMe) => 
+    request('/auth/login', { method: 'POST', body: { username, password, rememberMe } }),
+  
+  logout: () => 
+    request('/auth/logout', { method: 'POST' }),
+  
+  refresh: () => 
+    request('/auth/refresh', { method: 'POST' }),
+  
+  googleLogin: (credential) => 
+    request('/auth/google/login', { method: 'POST', body: { credential } }),
+  
+  googleLink: (credential) => 
+    request('/auth/google/link', { method: 'POST', body: { credential } }),
+  
+  forgotPassword: (email) => 
+    request('/auth/forgot-password', { method: 'POST', body: { email } }),
+  
+  resetPassword: (token, password) => 
+    request('/auth/reset-password', { method: 'POST', body: { token, password } }),
+
+  // User Profile (Self)
+  getProfile: () => 
+    request('/profile'),
+  
+  changePassword: (oldPassword, newPassword) => 
+    request('/profile/password', { method: 'PUT', body: { oldPassword, newPassword } }),
+
+  // Administrative User Management
+  getUsers: () => 
+    request('/admin/users'),
+  
+  createUser: (data) => 
+    request('/admin/users', { method: 'POST', body: data }),
+  
+  updateUser: (id, data) => 
+    request(`/admin/users/${id}`, { method: 'PUT', body: data }),
+  
+  resetUserPassword: (id, password) => 
+    request(`/admin/users/${id}/reset-password`, { method: 'PUT', body: { password } }),
+  
+  toggleUserStatus: (id, isActive) => 
+    request(`/admin/users/${id}/toggle-status`, { method: 'PATCH', body: { is_active: isActive } }),
+  
+  deleteUser: (id) => 
+    request(`/admin/users/${id}`, { method: 'DELETE' }),
+
   // Persons
   getPersons:       ()           => request('/persons'),
   getPerson:        (id)         => request(`/persons/${id}`),
@@ -39,6 +169,7 @@ export const api = {
   deletePerson:     (id)         => request(`/persons/${id}`, { method: 'DELETE' }),
   setCapabilities:  (id, caps)   => request(`/persons/${id}/capabilities`, { method: 'PUT', body: { capabilities: caps } }),
   setPermissions:   (id, perms)  => request(`/persons/${id}/permissions`,  { method: 'PUT', body: { permissions: perms } }),
+  resetPersonPassword: (id)      => request(`/persons/${id}/reset-password`, { method: 'POST' }),
 
   // Rooms
   getRooms:    ()         => request('/rooms'),
@@ -86,4 +217,26 @@ export const api = {
   exportExcel: (weekId) => download(`/weeks/${weekId}/export/excel`, `TKB_${weekId}.xlsx`),
   exportPdf:   (weekId) => download(`/weeks/${weekId}/export/pdf`,   `TKB_${weekId}.pdf`),
   exportCustom: (weekId, format, views) => request(`/weeks/${weekId}/export`, { method: 'POST', body: { format, views } }),
+
+  // TA Attendance & Claims (Staff/Admin)
+  getBranches: () => request('/attendance/branches'),
+  getAttendanceStatus: () => request('/attendance/status'),
+  scanQR: (token, lat, lng) => request('/attendance/scan', { method: 'POST', body: { token, lat, lng } }),
+  declareSessions: (attendanceLogId, sessions) => request('/attendance/declare', { method: 'POST', body: { attendance_log_id: attendanceLogId, sessions } }),
+  submitClaim: (data) => request('/attendance/claim', { method: 'POST', body: data }),
+  getMyAttendanceLogs: () => request('/attendance/my-logs'),
+
+  // Admin Attendance & Payroll
+  generateQR: (branchId) => request(`/attendance/admin/qr?branchId=${branchId}`),
+  adminGetPendingSessions: () => request('/attendance/admin/pending'),
+  adminApproveSession: (id, isApproved, adminNotes) => request(`/attendance/admin/approve-session/${id}`, { method: 'POST', body: { is_approved: isApproved, admin_notes: adminNotes } }),
+  adminGetClaims: () => request('/attendance/admin/claims'),
+  adminResolveClaim: (id, status, adminNotes) => request(`/attendance/admin/resolve-claim/${id}`, { method: 'POST', body: { status, admin_notes: adminNotes } }),
+  adminGetPayroll: (startDate, endDate, branchId) => request(`/attendance/admin/payroll?startDate=${startDate}&endDate=${endDate}${branchId ? `&branchId=${branchId}` : ''}`),
+
+  // Branches CRUD
+  adminGetBranches: () => request('/attendance/admin/branches'),
+  adminCreateBranch: (data) => request('/attendance/admin/branches', { method: 'POST', body: data }),
+  adminUpdateBranch: (id, data) => request(`/attendance/admin/branches/${id}`, { method: 'PUT', body: data }),
+  adminDeleteBranch: (id) => request(`/attendance/admin/branches/${id}`, { method: 'DELETE' }),
 };

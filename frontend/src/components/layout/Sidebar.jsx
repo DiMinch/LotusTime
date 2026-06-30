@@ -1,21 +1,42 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../services/AuthContext';
 import {
   CalendarDots, Users, Door, Clock, ChalkboardTeacher,
-  CalendarPlus, Gauge, GearSix, CaretLeft, CaretRight
-} from '@phosphor-icons/react'
-import './Sidebar.css'
-
-const NAV_ITEMS = [
-  { to: '/', label: 'Tổng quan', icon: Gauge },
-  { to: '/schedule', label: 'Thời khóa biểu', icon: CalendarDots },
-  { to: '/persons', label: 'Giáo viên & TA', icon: Users },
-  { to: '/classes', label: 'Lớp học', icon: ChalkboardTeacher },
-  { to: '/rooms', label: 'Phòng học', icon: Door },
-  { to: '/time-slots', label: 'Khung giờ', icon: Clock },
-  { to: '/weeks', label: 'Quản lý tuần', icon: CalendarPlus },
-]
+  CalendarPlus, Gauge, GearSix, CaretLeft, CaretRight,
+  User, UserGear, SignOut, QrCode, Coins
+} from '@phosphor-icons/react';
+import './Sidebar.css';
 
 export default function Sidebar({ isCollapsed, onToggle }) {
+  const { user, isAdmin, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login');
+  };
+
+  // Define admin navigation items
+  const adminNavItems = [
+    { to: '/', label: 'Tổng quan', icon: Gauge },
+    { to: '/schedule', label: 'Thời khóa biểu', icon: CalendarDots },
+    { to: '/admin/attendance', label: 'Quản lý chấm công', icon: Coins },
+    { to: '/attendance', label: 'Chấm công TA', icon: QrCode },
+    { to: '/persons', label: 'Giáo viên & TA', icon: Users },
+    { to: '/classes', label: 'Lớp học', icon: ChalkboardTeacher },
+    { to: '/rooms', label: 'Phòng học', icon: Door },
+    { to: '/time-slots', label: 'Khung giờ', icon: Clock },
+    { to: '/weeks', label: 'Quản lý tuần', icon: CalendarPlus },
+  ];
+
+  // Define staff navigation items
+  const staffNavItems = [
+    { to: '/attendance', label: 'Chấm công TA', icon: QrCode },
+    { to: '/profile', label: 'Hồ sơ cá nhân', icon: User },
+  ];
+
+  const navItems = isAdmin ? adminNavItems : staffNavItems;
+
   return (
     <aside className={`sidebar ${isCollapsed ? 'collapsed' : ''}`}>
       <div className="sidebar-brand">
@@ -34,8 +55,20 @@ export default function Sidebar({ isCollapsed, onToggle }) {
         {!isCollapsed && <p className="sidebar-tagline">Xếp lịch thông minh</p>}
       </div>
 
+      {/* User Info Quick View */}
+      {!isCollapsed && user && (
+        <div style={{ padding: 'var(--space-md) var(--space-lg)', borderBottom: '1px solid var(--color-hairline)', textAlign: 'left', marginBottom: 'var(--space-sm)' }}>
+          <div style={{ fontWeight: 'bold', color: 'var(--text-h)', fontSize: '14px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {user.username}
+          </div>
+          <div style={{ fontSize: '12px', color: 'var(--color-mute)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {user.role === 'admin' ? 'Quản trị viên' : 'Nhân viên'}
+          </div>
+        </div>
+      )}
+
       <nav className="sidebar-nav">
-        {NAV_ITEMS.map(item => (
+        {navItems.map(item => (
           <NavLink
             key={item.to}
             to={item.to}
@@ -50,10 +83,25 @@ export default function Sidebar({ isCollapsed, onToggle }) {
       </nav>
 
       <div className="sidebar-footer">
-        <NavLink to="/settings" className="sidebar-link" title={isCollapsed ? 'Cài đặt' : undefined}>
-          <GearSix size={20} weight="light" />
-          {!isCollapsed && <span>Cài đặt</span>}
-        </NavLink>
+        {/* Profile link for admin is placed here for consistency */}
+        {isAdmin && (
+          <NavLink to="/profile" className="sidebar-link" title={isCollapsed ? 'Hồ sơ cá nhân' : undefined}>
+            <User size={20} weight="light" />
+            {!isCollapsed && <span>Hồ sơ cá nhân</span>}
+          </NavLink>
+        )}
+
+        {isAdmin && (
+          <NavLink to="/settings" className="sidebar-link" title={isCollapsed ? 'Cài đặt' : undefined}>
+            <GearSix size={20} weight="light" />
+            {!isCollapsed && <span>Cài đặt</span>}
+          </NavLink>
+        )}
+
+        <button className="sidebar-link" onClick={handleLogout} title={isCollapsed ? 'Đăng xuất' : undefined} style={{ background: 'none', border: 'none', width: '100%', cursor: 'pointer', textAlign: 'left', color: 'var(--color-accent)' }}>
+          <SignOut size={20} weight="light" />
+          {!isCollapsed && <span>Đăng xuất</span>}
+        </button>
         
         <button className="sidebar-toggle-btn" onClick={onToggle} title={isCollapsed ? 'Mở rộng' : 'Thu gọn'}>
           {isCollapsed ? <CaretRight size={18} /> : <CaretLeft size={18} />}
@@ -61,5 +109,5 @@ export default function Sidebar({ isCollapsed, onToggle }) {
         </button>
       </div>
     </aside>
-  )
+  );
 }
