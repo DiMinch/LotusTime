@@ -1,0 +1,7 @@
+# Exclude node_modules from cloud uploads
+node_modules/
+.env
+backend.log
+backend_err.log
+.git
+.gitignore
