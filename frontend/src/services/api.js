@@ -1,4 +1,17 @@
-const BASE = import.meta.env.VITE_API_URL || '/api';
+let apiBaseUrl = import.meta.env.VITE_API_URL || '';
+
+if (apiBaseUrl) {
+  if (apiBaseUrl.endsWith('/')) {
+    apiBaseUrl = apiBaseUrl.slice(0, -1);
+  }
+  if (!apiBaseUrl.endsWith('/api')) {
+    apiBaseUrl = apiBaseUrl + '/api';
+  }
+} else {
+  apiBaseUrl = '/api';
+}
+
+const BASE = apiBaseUrl;
 
 let accessToken = null;
 
