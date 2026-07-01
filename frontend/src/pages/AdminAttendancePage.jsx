@@ -37,6 +37,14 @@ export default function AdminAttendancePage() {
   const [sessionNotes, setSessionNotes] = useState({});
   const [claimNotes, setClaimNotes] = useState({});
 
+  // History State
+  const [historyType, setHistoryType] = useState('session'); // 'session' or 'claim'
+  const [historyStatus, setHistoryStatus] = useState('all'); // 'all', 'approved', 'rejected', 'pending'
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyTotalPages, setHistoryTotalPages] = useState(1);
+  const [historyItems, setHistoryItems] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
   // Payroll Calculator
   const [payrollStart, setPayrollStart] = useState('');
   const [payrollEnd, setPayrollEnd] = useState('');
@@ -60,6 +68,12 @@ export default function AdminAttendancePage() {
     if (activeTab === 'approve') fetchPendingSessions();
     if (activeTab === 'claims') fetchPendingClaims();
   }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab === 'history') {
+      fetchHistory();
+    }
+  }, [activeTab, historyType, historyStatus, historyPage]);
 
   // QR Auto-Update Loop
   useEffect(() => {
@@ -113,6 +127,20 @@ export default function AdminAttendancePage() {
       setPendingClaims(list);
     } catch (err) {
       addToast('Lỗi tải danh sách bù công: ' + err.message, 'error');
+    }
+  };
+
+  const fetchHistory = async () => {
+    setHistoryLoading(true);
+    try {
+      const data = await api.adminGetHistory(historyType, historyStatus, historyPage, 10);
+      setHistoryItems(data.items || []);
+      setHistoryTotalPages(data.totalPages || 1);
+      setHistoryPage(data.page || 1);
+    } catch (err) {
+      addToast('Lỗi tải lịch sử duyệt: ' + err.message, 'error');
+    } finally {
+      setHistoryLoading(false);
     }
   };
 
@@ -281,6 +309,10 @@ export default function AdminAttendancePage() {
         <button className={`admin-tab-btn ${activeTab === 'claims' ? 'active' : ''}`} onClick={() => setActiveTab('claims')}>
           <Warning size={18} />
           <span>Đơn bù công ({pendingClaims.length})</span>
+        </button>
+        <button className={`admin-tab-btn ${activeTab === 'history' ? 'active' : ''}`} onClick={() => setActiveTab('history')}>
+          <Calendar size={18} />
+          <span>Lịch sử duyệt ca</span>
         </button>
         <button className={`admin-tab-btn ${activeTab === 'payroll' ? 'active' : ''}`} onClick={() => setActiveTab('payroll')}>
           <Coins size={18} />
@@ -594,6 +626,149 @@ export default function AdminAttendancePage() {
                   </tbody>
                 </table>
               </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB: DUYỆT CA HISTORY */}
+        {activeTab === 'history' && (
+          <div className="admin-tab-pane">
+            <div className="pane-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-md)', marginBottom: 'var(--space-md)' }}>
+              <h2 className="section-title" style={{ margin: 0 }}>Lịch Sử Duyệt Ca & Bù Công</h2>
+              <div className="history-filters" style={{ display: 'flex', gap: 'var(--space-md)', flexWrap: 'wrap' }}>
+                <div className="form-group" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <label style={{ fontWeight: '500', whiteSpace: 'nowrap' }}>Loại yêu cầu:</label>
+                  <select 
+                    value={historyType} 
+                    onChange={(e) => { setHistoryType(e.target.value); setHistoryPage(1); }}
+                    style={{ padding: '6px 12px', borderRadius: '4px', border: '1px solid var(--color-hairline)', background: 'var(--color-surface)', color: 'var(--text-main)' }}
+                  >
+                    <option value="session">Ca dạy khai báo</option>
+                    <option value="claim">Đơn báo bù công</option>
+                  </select>
+                </div>
+
+                <div className="form-group" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <label style={{ fontWeight: '500', whiteSpace: 'nowrap' }}>Trạng thái:</label>
+                  <select 
+                    value={historyStatus} 
+                    onChange={(e) => { setHistoryStatus(e.target.value); setHistoryPage(1); }}
+                    style={{ padding: '6px 12px', borderRadius: '4px', border: '1px solid var(--color-hairline)', background: 'var(--color-surface)', color: 'var(--text-main)' }}
+                  >
+                    <option value="all">Tất cả</option>
+                    <option value="approved">Đã duyệt</option>
+                    <option value="rejected">Đã từ chối</option>
+                    <option value="pending">Chờ duyệt</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {historyLoading ? (
+              <div className="loading-state" style={{ padding: 'var(--space-lg)', textAlign: 'center', color: 'var(--text-mute)' }}>Đang tải lịch sử...</div>
+            ) : historyItems.length === 0 ? (
+              <p className="no-data" style={{ padding: 'var(--space-lg)', textAlign: 'center', background: 'var(--color-surface-soft)', borderRadius: '8px' }}>Không tìm thấy bản ghi lịch sử nào phù hợp.</p>
+            ) : (
+              <>
+                <div className="data-table-wrapper">
+                  <table className="admin-payroll-table">
+                    <thead>
+                      {historyType === 'session' ? (
+                        <tr>
+                          <th>Nhân sự (TA)</th>
+                          <th>Chi nhánh</th>
+                          <th>Ngày/Giờ dạy</th>
+                          <th>Năng lực</th>
+                          <th>Độ dài</th>
+                          <th>Thành tiền</th>
+                          <th>Trạng thái</th>
+                          <th>Ghi chú Admin</th>
+                        </tr>
+                      ) : (
+                        <tr>
+                          <th>Nhân sự (TA)</th>
+                          <th>Chi nhánh</th>
+                          <th>Ngày bù công</th>
+                          <th>Giờ Vào/Ra khai báo</th>
+                          <th>Lý do khiếu nại</th>
+                          <th>Trạng thái</th>
+                          <th>Ghi chú Admin</th>
+                        </tr>
+                      )}
+                    </thead>
+                    <tbody>
+                      {historyItems.map((item) => (
+                        <tr key={item.id}>
+                          <td>
+                            <div className="user-info-cell" style={{ display: 'flex', flexDirection: 'column' }}>
+                              <strong>{item.person_full_name || item.username}</strong>
+                              <span style={{ fontSize: '12px', color: 'var(--text-mute)' }}>@{item.username}</span>
+                            </div>
+                          </td>
+                          <td>{item.branch_name}</td>
+                          
+                          {historyType === 'session' ? (
+                            <>
+                              <td>
+                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                  <strong>{formatDate(item.check_in_time)}</strong>
+                                  <span style={{ fontSize: '12px', color: 'var(--text-mute)' }}>{formatTime(item.start_time)} - {formatTime(item.end_time)}</span>
+                                </div>
+                              </td>
+                              <td><span className="capability-tag" style={{ background: 'var(--color-surface-soft)', padding: '2px 8px', borderRadius: '4px', fontSize: '12px' }}>{item.ta_capability.replace('TA_', '')}</span></td>
+                              <td>{item.duration_hours}h</td>
+                              <td>{formatCurrency(item.total_pay)}</td>
+                              <td>
+                                <span className={`badge badge-${item.status || (item.is_approved ? 'approved' : 'rejected')}`} style={{ textTransform: 'capitalize' }}>
+                                  {item.status === 'approved' || item.is_approved ? 'Đã duyệt' : item.status === 'rejected' ? 'Bị từ chối' : 'Chờ duyệt'}
+                                </span>
+                              </td>
+                              <td>{item.admin_notes || '--'}</td>
+                            </>
+                          ) : (
+                            <>
+                              <td><strong>{formatDate(item.claim_date)}</strong></td>
+                              <td>
+                                <div style={{ display: 'flex', flexDirection: 'column', fontSize: '13px' }}>
+                                  <span>Vào: {new Date(item.claimed_check_in).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</span>
+                                  <span>Ra: {new Date(item.claimed_check_out).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</span>
+                                </div>
+                              </td>
+                              <td style={{ maxWidth: '250px', whiteSpace: 'normal', fontSize: '13px' }}>{item.reason}</td>
+                              <td>
+                                <span className={`badge badge-${item.status}`} style={{ textTransform: 'capitalize' }}>
+                                  {item.status === 'approved' ? 'Đã duyệt' : item.status === 'rejected' ? 'Bị từ chối' : 'Chờ duyệt'}
+                                </span>
+                              </td>
+                              <td>{item.admin_notes || '--'}</td>
+                            </>
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {historyTotalPages > 1 && (
+                  <div className="pagination-controls" style={{ display: 'flex', gap: '10px', alignItems: 'center', justifyContent: 'center', marginTop: 'var(--space-md)' }}>
+                    <button 
+                      disabled={historyPage === 1} 
+                      onClick={() => setHistoryPage(prev => Math.max(prev - 1, 1))}
+                      className="btn btn-secondary btn-sm"
+                    >
+                      Trước
+                    </button>
+                    <span>Trang {historyPage} / {historyTotalPages}</span>
+                    <button 
+                      disabled={historyPage === historyTotalPages} 
+                      onClick={() => setHistoryPage(prev => Math.min(prev + 1, historyTotalPages))}
+                      className="btn btn-secondary btn-sm"
+                    >
+                      Sau
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}

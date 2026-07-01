@@ -41,9 +41,37 @@ export default function AttendancePage() {
   const [claimReason, setClaimReason] = useState('');
   const [submittingClaim, setSubmittingClaim] = useState(false);
 
+  // Pagination states
+  const [logsPage, setLogsPage] = useState(1);
+  const [totalPagesLogs, setTotalPagesLogs] = useState(1);
+  const [claimsPage, setClaimsPage] = useState(1);
+  const [totalPagesClaims, setTotalPagesClaims] = useState(1);
+
   useEffect(() => {
     fetchInitialData();
   }, []);
+
+  const fetchLogsPage = async (page) => {
+    try {
+      const history = await api.getMyAttendanceLogs(page, claimsPage, 10);
+      setLogs(history.logs || []);
+      setLogsPage(history.logsPage);
+      setTotalPagesLogs(history.totalPagesLogs);
+    } catch (err) {
+      addToast('Lỗi tải nhật ký: ' + err.message, 'error');
+    }
+  };
+
+  const fetchClaimsPage = async (page) => {
+    try {
+      const history = await api.getMyAttendanceLogs(logsPage, page, 10);
+      setClaims(history.claims || []);
+      setClaimsPage(history.claimsPage);
+      setTotalPagesClaims(history.totalPagesClaims);
+    } catch (err) {
+      addToast('Lỗi tải đơn bù công: ' + err.message, 'error');
+    }
+  };
 
   const fetchInitialData = async () => {
     setLoading(true);
@@ -58,9 +86,13 @@ export default function AttendancePage() {
         setClaimBranchId(branchList[0].id);
       }
 
-      const history = await api.getMyAttendanceLogs();
+      const history = await api.getMyAttendanceLogs(1, 1, 10);
       setLogs(history.logs || []);
       setClaims(history.claims || []);
+      setLogsPage(history.logsPage || 1);
+      setTotalPagesLogs(history.totalPagesLogs || 1);
+      setClaimsPage(history.claimsPage || 1);
+      setTotalPagesClaims(history.totalPagesClaims || 1);
     } catch (err) {
       addToast('Lỗi tải dữ liệu chấm công: ' + (err.message || err), 'error');
     } finally {
@@ -482,6 +514,25 @@ export default function AttendancePage() {
                     </table>
                   </div>
                 )}
+                {totalPagesLogs > 1 && (
+                  <div className="pagination-controls" style={{ display: 'flex', gap: '10px', alignItems: 'center', justifyContent: 'center', marginTop: 'var(--space-md)' }}>
+                    <button 
+                      disabled={logsPage === 1} 
+                      onClick={() => fetchLogsPage(logsPage - 1)}
+                      className="btn btn-secondary btn-sm"
+                    >
+                      Trước
+                    </button>
+                    <span>Trang {logsPage} / {totalPagesLogs}</span>
+                    <button 
+                      disabled={logsPage === totalPagesLogs} 
+                      onClick={() => fetchLogsPage(logsPage + 1)}
+                      className="btn btn-secondary btn-sm"
+                    >
+                      Sau
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Claims Section */}
@@ -507,6 +558,25 @@ export default function AttendancePage() {
                         </div>
                       </div>
                     ))}
+                  </div>
+                )}
+                {totalPagesClaims > 1 && (
+                  <div className="pagination-controls" style={{ display: 'flex', gap: '10px', alignItems: 'center', justifyContent: 'center', marginTop: 'var(--space-md)' }}>
+                    <button 
+                      disabled={claimsPage === 1} 
+                      onClick={() => fetchClaimsPage(claimsPage - 1)}
+                      className="btn btn-secondary btn-sm"
+                    >
+                      Trước
+                    </button>
+                    <span>Trang {claimsPage} / {totalPagesClaims}</span>
+                    <button 
+                      disabled={claimsPage === totalPagesClaims} 
+                      onClick={() => fetchClaimsPage(claimsPage + 1)}
+                      className="btn btn-secondary btn-sm"
+                    >
+                      Sau
+                    </button>
                   </div>
                 )}
               </div>

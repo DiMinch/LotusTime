@@ -1,8 +1,11 @@
 import { useState } from 'react'
 import Sidebar from './Sidebar'
+import NotificationBell from './NotificationBell'
+import { useAuth } from '../../services/AuthContext'
 import './Layout.css'
 
 export default function Layout({ children }) {
+  const { user } = useAuth()
   const [isCollapsed, setIsCollapsed] = useState(() => {
     return localStorage.getItem('sidebar-collapsed') === 'true'
   })
@@ -35,7 +38,7 @@ export default function Layout({ children }) {
           <span className="logo-lotus">Lotus</span>
           <span className="logo-time">Time</span>
         </div>
-        <div style={{ width: '40px' }} /> {/* Spacer to center the logo */}
+        <NotificationBell />
       </header>
 
       {/* Overlay Backdrop */}
@@ -50,7 +53,22 @@ export default function Layout({ children }) {
       />
       
       <main className="app-main">
-        {children}
+        {/* Desktop Topbar */}
+        <header className="desktop-topbar">
+          <div className="topbar-left">
+            {/* Left aligned spacer or page titles could optionally go here */}
+          </div>
+          <div className="topbar-right">
+            <NotificationBell />
+            <div className="topbar-user">
+              <span className="topbar-username">{user?.username}</span>
+              <span className="topbar-role">{user?.role === 'admin' ? 'Quản trị viên' : 'Trợ giảng / Giáo viên'}</span>
+            </div>
+          </div>
+        </header>
+        <div className="app-content">
+          {children}
+        </div>
       </main>
     </div>
   )

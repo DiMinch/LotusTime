@@ -16,12 +16,21 @@ const availability = require('../controllers/availabilitiesController');
 const constraints = require('../controllers/constraintsController');
 const sessions = require('../controllers/sessionsController');
 const attendance = require('../controllers/attendanceController');
+const notifications = require('../controllers/notificationController');
 
 // 1. Public Auth Router
 router.use('/auth', authRouter);
 
 // 2. Authentication Barrier for all subsequent routes
 router.use(authenticateToken);
+
+// 2.1. Notifications Routes
+router.get('/notifications', notifications.getUserNotifications);
+router.get('/notifications/unread-count', notifications.getUnreadCount);
+router.post('/notifications/read-all', notifications.markAllAsRead);
+router.patch('/notifications/:id/read', notifications.markAsRead);
+router.get('/profile/notification-settings', notifications.getSettings);
+router.put('/profile/notification-settings', notifications.updateSettings);
 
 // 3. User Self Profile Router (Accessible by admin & staff)
 router.use('/profile', profileRouter);
@@ -47,6 +56,7 @@ router.post('/attendance/admin/approve-session/:id', attendance.adminApproveSess
 router.get('/attendance/admin/claims', attendance.adminGetClaims);
 router.post('/attendance/admin/resolve-claim/:id', attendance.adminResolveClaim);
 router.get('/attendance/admin/payroll', attendance.adminGetPayroll);
+router.get('/attendance/admin/history', attendance.adminGetHistory);
 
 // Branches CRUD
 router.get('/attendance/admin/branches', attendance.adminListBranches);
@@ -151,6 +161,44 @@ router.patch('/sessions/:id/move', async (req, res, next) => {
       [time_slot_id, room_id, req.params.id]
     );
     if (rows.length === 0) return res.status(400).json({ error: 'Không thể di chuyển (lớp đã gán cứng hoặc không tồn tại)' });
+
+    // Trigger notification if published
+    const { rows: weekRows } = await db.query(
+      `SELECT w.status, w.id as week_id, c.code as class_code, ts.label as ts_label, r.name as room_name
+       FROM sessions s
+       JOIN schedule_weeks w ON w.id = s.week_id
+       JOIN classes c ON c.id = s.class_id
+       LEFT JOIN time_slots ts ON ts.id = s.time_slot_id
+       LEFT JOIN rooms r ON r.id = s.room_id
+       WHERE s.id = $1`,
+      [req.params.id]
+    );
+
+    if (weekRows.length > 0 && weekRows[0].status === 'published') {
+      const { week_id, class_code, ts_label, room_name } = weekRows[0];
+      const { rows: assignedUsers } = await db.query(
+        `SELECT DISTINCT u.id 
+         FROM session_assignments sa
+         JOIN users u ON u.person_id = sa.person_id
+         WHERE sa.session_id = $1`,
+        [req.params.id]
+      );
+      
+      const { dispatchNotification } = require('../services/notificationService');
+      const actorId = req.user ? req.user.id : null;
+
+      for (const user of assignedUsers) {
+        await dispatchNotification({
+          recipientId: user.id,
+          actorId,
+          type: 'SES_UPD',
+          title: `Lịch học lớp ${class_code} đã thay đổi`,
+          content: `Lịch dạy lớp ${class_code} đã được dời sang khung giờ ${ts_label} tại phòng ${room_name || 'N/A'}.`,
+          targetUrl: `/schedule?week=${week_id}`
+        });
+      }
+    }
+
     res.json(rows[0]);
   } catch (err) { next(err); }
 });
@@ -192,6 +240,28 @@ router.put('/sessions/:id/assignment', async (req, res, next) => {
       if (doubleBookings.length > 0) return res.status(400).json({ error: 'Trợ giảng (TA) này đã có lịch dạy vào giờ này!' });
     }
 
+    const { rows: weekRows } = await db.query(
+      `SELECT w.status, w.id as week_id, c.code as class_code, ts.label as ts_label 
+       FROM sessions s 
+       JOIN schedule_weeks w ON w.id = s.week_id
+       JOIN classes c ON c.id = s.class_id
+       LEFT JOIN time_slots ts ON ts.id = s.time_slot_id
+       WHERE s.id = $1`,
+      [req.params.id]
+    );
+    const isPublished = weekRows.length > 0 && weekRows[0].status === 'published';
+    let oldUserIds = [];
+    if (isPublished) {
+      const { rows: oldUsers } = await db.query(
+        `SELECT DISTINCT u.id 
+         FROM session_assignments sa 
+         JOIN users u ON u.person_id = sa.person_id 
+         WHERE sa.session_id = $1`,
+        [req.params.id]
+      );
+      oldUserIds = oldUsers.map(u => u.id);
+    }
+
     client = await db.pool.connect();
     await client.query('BEGIN');
     await client.query('DELETE FROM session_assignments WHERE session_id = $1', [req.params.id]);
@@ -215,6 +285,48 @@ router.put('/sessions/:id/assignment', async (req, res, next) => {
     }
     
     await client.query('COMMIT');
+
+    if (isPublished) {
+      const { week_id, class_code, ts_label } = weekRows[0];
+      const { rows: newUsers } = await db.query(
+        `SELECT DISTINCT u.id 
+         FROM session_assignments sa 
+         JOIN users u ON u.person_id = sa.person_id 
+         WHERE sa.session_id = $1`,
+        [req.params.id]
+      );
+      const newUserIds = newUsers.map(u => u.id);
+      
+      const { dispatchNotification } = require('../services/notificationService');
+      const actorId = req.user ? req.user.id : null;
+
+      // 1. Removed users
+      const removedUserIds = oldUserIds.filter(id => !newUserIds.includes(id));
+      for (const uid of removedUserIds) {
+        await dispatchNotification({
+          recipientId: uid,
+          actorId,
+          type: 'SES_UPD',
+          title: `Thay đổi phân công dạy lớp ${class_code}`,
+          content: `Bạn đã được rút khỏi lịch dạy lớp ${class_code} vào giờ ${ts_label}.`,
+          targetUrl: `/schedule?week=${week_id}`
+        });
+      }
+
+      // 2. Added users
+      const addedUserIds = newUserIds.filter(id => !oldUserIds.includes(id));
+      for (const uid of addedUserIds) {
+        await dispatchNotification({
+          recipientId: uid,
+          actorId,
+          type: 'SES_UPD',
+          title: `Phân công dạy mới lớp ${class_code}`,
+          content: `Bạn đã được phân công giảng dạy/trợ giảng lớp ${class_code} vào giờ ${ts_label}.`,
+          targetUrl: `/schedule?week=${week_id}`
+        });
+      }
+    }
+
     res.json({ success: true, assignments: results });
   } catch (err) {
     if (client) try { await client.query('ROLLBACK'); } catch (_) {}

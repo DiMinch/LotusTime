@@ -240,7 +240,7 @@ export const api = {
   scanQR: (token, lat, lng) => request('/attendance/scan', { method: 'POST', body: { token, lat, lng } }),
   declareSessions: (attendanceLogId, sessions) => request('/attendance/declare', { method: 'POST', body: { attendance_log_id: attendanceLogId, sessions } }),
   submitClaim: (data) => request('/attendance/claim', { method: 'POST', body: data }),
-  getMyAttendanceLogs: () => request('/attendance/my-logs'),
+  getMyAttendanceLogs: (logsPage = 1, claimsPage = 1, limit = 10) => request(`/attendance/my-logs?logsPage=${logsPage}&claimsPage=${claimsPage}&limit=${limit}`),
 
   // Admin Attendance & Payroll
   generateQR: (branchId) => request(`/attendance/admin/qr?branchId=${branchId}`),
@@ -249,10 +249,25 @@ export const api = {
   adminGetClaims: () => request('/attendance/admin/claims'),
   adminResolveClaim: (id, status, adminNotes) => request(`/attendance/admin/resolve-claim/${id}`, { method: 'POST', body: { status, admin_notes: adminNotes } }),
   adminGetPayroll: (startDate, endDate, branchId) => request(`/attendance/admin/payroll?startDate=${startDate}&endDate=${endDate}${branchId ? `&branchId=${branchId}` : ''}`),
+  adminGetHistory: (type, status, page, limit = 10) => request(`/attendance/admin/history?type=${type}&status=${status}&page=${page}&limit=${limit}`),
 
   // Branches CRUD
   adminGetBranches: () => request('/attendance/admin/branches'),
   adminCreateBranch: (data) => request('/attendance/admin/branches', { method: 'POST', body: data }),
   adminUpdateBranch: (id, data) => request(`/attendance/admin/branches/${id}`, { method: 'PUT', body: data }),
   adminDeleteBranch: (id) => request(`/attendance/admin/branches/${id}`, { method: 'DELETE' }),
+
+  // Notifications
+  getNotifications: (cursorCreatedAt, cursorId, limit = 10) => {
+    let url = `/notifications?limit=${limit}`;
+    if (cursorCreatedAt && cursorId) {
+      url += `&cursor_created_at=${encodeURIComponent(cursorCreatedAt)}&cursor_id=${cursorId}`;
+    }
+    return request(url);
+  },
+  getUnreadNotificationsCount: () => request('/notifications/unread-count'),
+  markNotificationAsRead: (id) => request(`/notifications/${id}/read`, { method: 'PATCH' }),
+  markAllNotificationsAsRead: () => request('/notifications/read-all', { method: 'POST' }),
+  getNotificationSettings: () => request('/profile/notification-settings'),
+  updateNotificationSettings: (settings) => request('/profile/notification-settings', { method: 'PUT', body: { settings } }),
 };

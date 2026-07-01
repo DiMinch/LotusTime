@@ -7,7 +7,7 @@ const rateLimit = require('express-rate-limit');
 // Rate limiter: 5 attempts per 15 minutes per IP + Username/Email combo
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 5,
+  max: 30,
   keyGenerator: (req) => `${req.ip}_${req.body.username || req.body.email || ''}`,
   validate: false,
   message: {

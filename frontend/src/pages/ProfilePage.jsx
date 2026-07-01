@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../services/AuthContext';
 import { api } from '../services/api';
 import { useToast } from '../components/layout/Toast';
-import { User, Lock, FloppyDisk, Check, GoogleLogo, Eye, EyeSlash } from '@phosphor-icons/react';
+import { User, Lock, FloppyDisk, Check, GoogleLogo, Eye, EyeSlash, Bell } from '@phosphor-icons/react';
 
 export default function ProfilePage() {
   const { user, linkGoogle } = useAuth();
@@ -18,6 +18,19 @@ export default function ProfilePage() {
   const [submittingPass, setSubmittingPass] = useState(false);
   const [linkingGoogle, setLinkingGoogle] = useState(false);
 
+  // Notification Settings States
+  const [notificationSettings, setNotificationSettings] = useState(null);
+  const [loadingSettings, setLoadingSettings] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
+
+  const eventLabels = {
+    SCH_PUB: 'Xuất bản thời khóa biểu tuần mới',
+    SES_UPD: 'Thay đổi lịch học/phân công giảng dạy',
+    SUB_REQ: 'Yêu cầu thế chỗ dạy học (Substitution)',
+    ATT_APP: 'Phê duyệt chấm công / bù công',
+    ATT_REJ: 'Từ chối chấm công / bù công'
+  };
+
   // 1. Fetch full user profile details on mount
   const loadProfile = async () => {
     try {
@@ -28,8 +41,47 @@ export default function ProfilePage() {
     }
   };
 
+  const loadNotificationSettings = async () => {
+    setLoadingSettings(true);
+    try {
+      const data = await api.getNotificationSettings();
+      setNotificationSettings(data || {});
+    } catch (err) {
+      console.error('Failed to load notification settings', err);
+    } finally {
+      setLoadingSettings(false);
+    }
+  };
+
+  const handleToggleSetting = (eventKey, channel) => {
+    setNotificationSettings(prev => {
+      const current = prev[eventKey] || { email: false, inapp: false };
+      return {
+        ...prev,
+        [eventKey]: {
+          ...current,
+          [channel]: !current[channel]
+        }
+      };
+    });
+  };
+
+  const handleSaveSettings = async (e) => {
+    e.preventDefault();
+    setSavingSettings(true);
+    try {
+      await api.updateNotificationSettings(notificationSettings);
+      toast.success('Cập nhật cấu hình nhận thông báo thành công!');
+    } catch (err) {
+      toast.error(err.message || 'Cập nhật cấu hình nhận thông báo thất bại.');
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
   useEffect(() => {
     loadProfile();
+    loadNotificationSettings();
   }, []);
 
   // 2. Google Link Button Rendering with polling to prevent async script load race conditions
@@ -334,6 +386,75 @@ export default function ProfilePage() {
           </form>
         </div>
 
+      </div>
+
+      {/* Notification Settings Section */}
+      <div className="card" style={{ marginTop: 'var(--space-xl)' }}>
+        <h2 style={{ fontSize: 'var(--text-heading-sm-size)', marginBottom: 'var(--space-lg)', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Bell size={24} weight="light" /> Cài đặt nhận thông báo
+        </h2>
+        <p style={{ fontSize: '13px', color: 'var(--color-mute)', marginBottom: 'var(--space-lg)' }}>
+          Tùy chỉnh các loại sự kiện bạn muốn nhận thông báo qua kênh trong ứng dụng (In-app) hoặc qua thư điện tử (Email).
+        </p>
+
+        {loadingSettings ? (
+          <div style={{ textAlign: 'center', padding: 'var(--space-xl) 0', color: 'var(--color-mute)' }}>
+            Đang tải cấu hình thông báo...
+          </div>
+        ) : !notificationSettings ? (
+          <div style={{ textAlign: 'center', padding: 'var(--space-xl) 0', color: 'var(--color-mute)' }}>
+            Không tìm thấy cấu hình thông báo.
+          </div>
+        ) : (
+          <form onSubmit={handleSaveSettings}>
+            <div className="data-table-wrapper" style={{ marginBottom: 'var(--space-lg)' }}>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Loại sự kiện</th>
+                    <th style={{ width: '120px', textAlign: 'center' }}>In-app (Web)</th>
+                    <th style={{ width: '120px', textAlign: 'center' }}>Email</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(eventLabels).map(([eventKey, label]) => {
+                    const channels = notificationSettings[eventKey] || { email: false, inapp: false };
+                    return (
+                      <tr key={eventKey}>
+                        <td style={{ fontWeight: '500' }}>{label}</td>
+                        <td style={{ textAlign: 'center' }}>
+                          <input
+                            type="checkbox"
+                            checked={!!channels.inapp}
+                            onChange={() => handleToggleSetting(eventKey, 'inapp')}
+                            style={{ cursor: 'pointer', width: '18px', height: '18px' }}
+                          />
+                        </td>
+                        <td style={{ textAlign: 'center' }}>
+                          <input
+                            type="checkbox"
+                            checked={!!channels.email}
+                            onChange={() => handleToggleSetting(eventKey, 'email')}
+                            style={{ cursor: 'pointer', width: '18px', height: '18px' }}
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <button type="submit" className="btn-primary" disabled={savingSettings}>
+              {savingSettings ? 'Đang lưu...' : (
+                <>
+                  <FloppyDisk size={18} weight="bold" style={{ marginRight: 8 }} />
+                  Lưu cấu hình thông báo
+                </>
+              )}
+            </button>
+          </form>
+        )}
       </div>
     </div>
   );

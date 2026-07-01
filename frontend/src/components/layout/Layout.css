@@ -16,6 +16,42 @@
   margin-left: 64px;
 }
 
+/* Desktop Topbar */
+.desktop-topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 56px;
+  margin-bottom: var(--space-xl);
+  padding-bottom: var(--space-md);
+  border-bottom: 1px solid var(--color-hairline);
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.topbar-user {
+  display: flex;
+  flex-direction: column;
+  text-align: right;
+  border-left: 1px solid var(--color-hairline);
+  padding-left: var(--space-md);
+}
+
+.topbar-username {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.topbar-role {
+  font-size: 11px;
+  color: var(--color-mute);
+}
+
 /* Page header pattern */
 .page-header {
   display: flex;
@@ -315,6 +351,10 @@
 }
 
 @media (max-width: 768px) {
+  .desktop-topbar {
+    display: none !important;
+  }
+
   .mobile-header {
     display: flex;
     align-items: center;

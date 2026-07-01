@@ -300,6 +300,18 @@ module.exports = {
   async getMyLogs(req, res, next) {
     try {
       const userId = req.user.id;
+      const logsPage = parseInt(req.query.logsPage) || 1;
+      const claimsPage = parseInt(req.query.claimsPage) || 1;
+      const limit = parseInt(req.query.limit) || 10;
+      
+      const logsOffset = (logsPage - 1) * limit;
+      const claimsOffset = (claimsPage - 1) * limit;
+
+      // Get total count of logs
+      const { rows: countLogsRows } = await db.query(
+        `SELECT COUNT(*) FROM attendance_logs WHERE user_id = $1`, [userId]
+      );
+      const totalLogs = parseInt(countLogsRows[0].count);
 
       // Get attendance logs with declared sessions nested
       const { rows: logs } = await db.query(
@@ -315,18 +327,32 @@ module.exports = {
                  'snapshot_hourly_rate', s.snapshot_hourly_rate,
                  'total_pay', s.total_pay,
                  'is_approved', s.is_approved,
-                 'admin_notes', s.admin_notes
+                 'admin_notes', s.admin_notes,
+                 'status', s.status
                )
              ) FILTER (WHERE s.id IS NOT NULL), '[]'
            ) AS declared_sessions
-         FROM attendance_logs l 
+         FROM (
+           SELECT * FROM attendance_logs 
+           WHERE user_id = $1 
+           ORDER BY check_in_time DESC
+           LIMIT $2 OFFSET $3
+         ) l 
          LEFT JOIN branches b ON b.id = l.branch_id 
          LEFT JOIN attendance_declared_sessions s ON s.attendance_log_id = l.id
-         WHERE l.user_id = $1 
-         GROUP BY l.id, b.name
+         GROUP BY l.id, l.user_id, l.branch_id, l.check_in_time, l.check_out_time, 
+                  l.check_in_lat, l.check_in_lng, l.check_out_lat, l.check_out_lng,
+                  l.check_in_gps_valid, l.check_out_gps_valid, l.ip_address, l.status,
+                  l.created_at, l.updated_at, b.name
          ORDER BY l.check_in_time DESC`,
-        [userId]
+        [userId, limit, logsOffset]
       );
+
+      // Get total count of claims
+      const { rows: countClaimsRows } = await db.query(
+        `SELECT COUNT(*) FROM attendance_claims WHERE user_id = $1`, [userId]
+      );
+      const totalClaims = parseInt(countClaimsRows[0].count);
 
       // Get claims
       const { rows: claims } = await db.query(
@@ -334,11 +360,22 @@ module.exports = {
          FROM attendance_claims c 
          LEFT JOIN branches b ON b.id = c.branch_id 
          WHERE c.user_id = $1 
-         ORDER BY c.claim_date DESC`,
-        [userId]
+         ORDER BY c.claim_date DESC
+         LIMIT $2 OFFSET $3`,
+        [userId, limit, claimsOffset]
       );
 
-      res.json({ logs, claims });
+      res.json({ 
+        logs, 
+        claims,
+        totalLogs,
+        totalClaims,
+        logsPage,
+        claimsPage,
+        totalPagesLogs: Math.ceil(totalLogs / limit),
+        totalPagesClaims: Math.ceil(totalClaims / limit),
+        limit
+      });
     } catch (err) { next(err); }
   },
 
@@ -370,15 +407,47 @@ module.exports = {
         return res.status(400).json({ error: 'MissingFields', message: 'Vui lòng điền trạng thái phê duyệt.' });
       }
 
+      const statusVal = is_approved ? 'approved' : 'rejected';
+
       const { rows } = await db.query(
         `UPDATE attendance_declared_sessions 
-         SET is_approved = $1, admin_notes = $2 
-         WHERE id = $3 RETURNING *`,
-        [is_approved, admin_notes || null, id]
+         SET is_approved = $1, admin_notes = $2, status = $3 
+         WHERE id = $4 RETURNING *`,
+        [is_approved, admin_notes || null, statusVal, id]
       );
 
       if (rows.length === 0) {
         return res.status(404).json({ error: 'SessionNotFound', message: 'Không tìm thấy ca dạy cần duyệt.' });
+      }
+
+      // Trigger notification
+      try {
+        const { rows: detailRows } = await db.query(
+          `SELECT l.user_id, l.check_in_time, b.name as branch_name 
+           FROM attendance_declared_sessions s
+           JOIN attendance_logs l ON l.id = s.attendance_log_id
+           LEFT JOIN branches b ON b.id = l.branch_id
+           WHERE s.id = $1`,
+          [id]
+        );
+        if (detailRows.length > 0) {
+          const { user_id, check_in_time, branch_name } = detailRows[0];
+          const formattedDate = new Date(check_in_time).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+          const { dispatchNotification } = require('../services/notificationService');
+          
+          await dispatchNotification({
+            recipientId: user_id,
+            actorId: req.user.id,
+            type: is_approved ? 'ATT_APP' : 'ATT_REJ',
+            title: is_approved ? 'Ca dạy khai báo đã được duyệt' : 'Ca dạy khai báo bị từ chối',
+            content: is_approved 
+              ? `Ca dạy của bạn tại chi nhánh ${branch_name || 'N/A'} ngày ${formattedDate} đã được phê duyệt.`
+              : `Ca dạy của bạn tại chi nhánh ${branch_name || 'N/A'} ngày ${formattedDate} đã bị từ chối. Lý do: ${admin_notes || 'Không có'}`,
+            targetUrl: '/attendance'
+          });
+        }
+      } catch (notiErr) {
+        console.error('Failed to dispatch attendance approval notification:', notiErr);
       }
 
       res.json({ success: true, session: rows[0], message: 'Đã cập nhật trạng thái phê duyệt ca dạy.' });
@@ -443,6 +512,25 @@ module.exports = {
         createdLog = logRows[0];
       }
 
+      // Trigger notification
+      try {
+        const formattedDate = new Date(claim.claim_date).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+        const { dispatchNotification } = require('../services/notificationService');
+        
+        await dispatchNotification({
+          recipientId: claim.user_id,
+          actorId: adminId,
+          type: status === 'approved' ? 'ATT_APP' : 'ATT_REJ',
+          title: status === 'approved' ? 'Đơn báo bù công đã được duyệt' : 'Đơn báo bù công bị từ chối',
+          content: status === 'approved'
+            ? `Đơn báo bù công của bạn ngày ${formattedDate} đã được phê duyệt.`
+            : `Đơn báo bù công của bạn ngày ${formattedDate} đã bị từ chối. Lý do: ${admin_notes || 'Không có'}`,
+          targetUrl: '/attendance'
+        });
+      } catch (notiErr) {
+        console.error('Failed to dispatch claim resolution notification:', notiErr);
+      }
+
       res.json({ 
         success: true, 
         message: `Đã ${status === 'approved' ? 'duyệt' : 'từ chối'} đơn khiếu nại thành công.`,
@@ -483,6 +571,93 @@ module.exports = {
 
       const { rows } = await db.query(query, params);
       res.json(rows);
+    } catch (err) { next(err); }
+  },
+
+  // 12.1. Admin: Get paginated history of declared sessions or claims
+  async adminGetHistory(req, res, next) {
+    try {
+      const type = req.query.type || 'session'; // 'session' or 'claim'
+      const status = req.query.status || 'all'; // 'all', 'approved', 'rejected', 'pending'
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 10;
+      const offset = (page - 1) * limit;
+
+      const params = [];
+      let whereClause = '';
+
+      if (type === 'session') {
+        if (status !== 'all') {
+          whereClause = `WHERE s.status = $1`;
+          params.push(status);
+        }
+
+        const countQuery = `
+          SELECT COUNT(*) 
+          FROM attendance_declared_sessions s
+          ${whereClause}
+        `;
+        const { rows: countRows } = await db.query(countQuery, params);
+        const total = parseInt(countRows[0].count);
+
+        const selectQuery = `
+          SELECT s.*, l.check_in_time, l.check_out_time, u.username, 
+                 p.full_name as person_full_name, b.name as branch_name 
+          FROM attendance_declared_sessions s 
+          JOIN attendance_logs l ON l.id = s.attendance_log_id 
+          JOIN users u ON u.id = l.user_id 
+          LEFT JOIN persons p ON p.id = u.person_id 
+          LEFT JOIN branches b ON b.id = l.branch_id
+          ${whereClause}
+          ORDER BY s.created_at DESC
+          LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+        `;
+        
+        const selectParams = [...params, limit, offset];
+        const { rows } = await db.query(selectQuery, selectParams);
+
+        res.json({
+          items: rows,
+          total,
+          page,
+          totalPages: Math.ceil(total / limit)
+        });
+      } else {
+        // type === 'claim'
+        if (status !== 'all') {
+          whereClause = `WHERE c.status = $1`;
+          params.push(status);
+        }
+
+        const countQuery = `
+          SELECT COUNT(*) 
+          FROM attendance_claims c
+          ${whereClause}
+        `;
+        const { rows: countRows } = await db.query(countQuery, params);
+        const total = parseInt(countRows[0].count);
+
+        const selectQuery = `
+          SELECT c.*, u.username, p.full_name as person_full_name, b.name as branch_name 
+          FROM attendance_claims c 
+          JOIN users u ON u.id = c.user_id 
+          LEFT JOIN persons p ON p.id = u.person_id 
+          LEFT JOIN branches b ON b.id = c.branch_id
+          ${whereClause}
+          ORDER BY c.created_at DESC
+          LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+        `;
+        
+        const selectParams = [...params, limit, offset];
+        const { rows } = await db.query(selectQuery, selectParams);
+
+        res.json({
+          items: rows,
+          total,
+          page,
+          totalPages: Math.ceil(total / limit)
+        });
+      }
     } catch (err) { next(err); }
   },
 

@@ -148,6 +148,7 @@ async function sendAccountCredentialsEmail(email, username, password) {
 }
 
 module.exports = {
+  sendMail,
   sendResetPasswordEmail,
   sendAccountCredentialsEmail
 };
