@@ -235,6 +235,14 @@
   margin-top: var(--space-sm);
 }
 
+#google-signin-btn {
+  width: 100%;
+  max-width: 400px;
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
+}
+
 .auth-footer {
   text-align: center;
   margin-top: var(--space-xl);

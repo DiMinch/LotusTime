@@ -24,7 +24,13 @@ export default function LoginPage() {
     const renderButton = () => {
       const container = document.getElementById('google-signin-btn');
       if (container && window.google) {
-        const parentWidth = container.offsetWidth || 386;
+        let parentWidth = container.offsetWidth;
+        if (!parentWidth && container.parentElement) {
+          parentWidth = container.parentElement.offsetWidth;
+        }
+        if (!parentWidth || parentWidth < 200) {
+          parentWidth = Math.min(window.innerWidth - 64, 386);
+        }
         const btnWidth = Math.min(Math.max(parentWidth, 200), 400);
         container.innerHTML = ''; // Clear previous button to re-render
         window.google.accounts.id.renderButton(
