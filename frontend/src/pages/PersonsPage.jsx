@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { api } from '../services/api'
-import { Plus, PencilSimple, Trash, Warning, Users as UsersIcon, Key } from '@phosphor-icons/react'
+import { Plus, PencilSimple, Trash, Warning, Users as UsersIcon, Key, Copy } from '@phosphor-icons/react'
 import { useToast } from '../components/layout/Toast'
 import { useConfirm } from '../components/layout/ConfirmModal'
 
@@ -304,9 +304,34 @@ export default function PersonsPage() {
               <div style={{ marginBottom: '8px', color: 'var(--text-h)' }}>
                 Mật khẩu tạm thời: <strong style={{ fontFamily: 'monospace', color: 'var(--color-primary)', fontSize: '15px' }}>{createdAccount.password}</strong>
               </div>
-              <div style={{ color: 'var(--text-h)' }}>
+              <div style={{ color: 'var(--text-h)', marginBottom: '14px' }}>
                 Email liên kết: <span style={{ fontFamily: 'monospace' }}>{createdAccount.email}</span>
               </div>
+              
+              <button 
+                type="button"
+                className="btn-outline" 
+                style={{ 
+                  width: '100%', 
+                  height: '34px',
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  gap: '8px',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  borderRadius: '4px',
+                  border: '1px solid var(--color-hairline)',
+                  background: 'var(--color-canvas)'
+                }}
+                onClick={() => {
+                  const text = `Tài khoản LotusTime:\nTên đăng nhập: ${createdAccount.username}\nMật khẩu tạm thời: ${createdAccount.password}\nEmail: ${createdAccount.email}`;
+                  navigator.clipboard.writeText(text);
+                  toast.success('Đã sao chép thông tin tài khoản!');
+                }}
+              >
+                <Copy size={16} /> Sao chép thông tin
+              </button>
             </div>
             {createdAccount.email !== '(Không có)' ? (
               <p style={{ fontSize: '12px', color: 'var(--color-mute)', marginBottom: 'var(--space-lg)' }}>
