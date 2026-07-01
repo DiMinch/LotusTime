@@ -2,7 +2,11 @@ const crypto = require('crypto');
 const db = require('../db/pool');
 const redisClient = require('../db/redis');
 
-const SECRET_KEY = process.env.JWT_SECRET || 'lotustime_jwt_secret_key_2026_secure';
+const SECRET_KEY = process.env.JWT_SECRET || (process.env.NODE_ENV === 'production' ? undefined : 'lotustime_jwt_secret_key_2026_secure');
+
+if (process.env.NODE_ENV === 'production' && !SECRET_KEY) {
+  throw new Error('FATAL: Insecure fallback SECRET_KEY is not allowed in production for attendance validation!');
+}
 
 // Helper: Haversine Formula to calculate distance in meters between two coordinates
 function calculateDistance(lat1, lon1, lat2, lon2) {
