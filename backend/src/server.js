@@ -4,7 +4,7 @@ require('dotenv').config();
 
 // Validate required environment variables in production
 if (process.env.NODE_ENV === 'production') {
-  const requiredEnv = ['DATABASE_URL', 'JWT_SECRET', 'JWT_REFRESH_SECRET', 'REDIS_URL'];
+  const requiredEnv = ['DATABASE_URL', 'JWT_SECRET', 'REDIS_URL'];
   const missing = requiredEnv.filter(key => !process.env[key]);
   if (missing.length > 0) {
     console.error(`FATAL ERROR: Missing required production environment variables: ${missing.join(', ')}`);
