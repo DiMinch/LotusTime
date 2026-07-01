@@ -10,6 +10,7 @@ if (process.env.NODE_ENV === 'production') {
     console.error(`FATAL ERROR: Missing required production environment variables: ${missing.join(', ')}`);
     process.exit(1);
   }
+  console.log('Production environment variables validation passed.');
 }
 
 const apiRouter = require('./routes/api');
