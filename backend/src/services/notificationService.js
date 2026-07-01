@@ -1,4 +1,4 @@
-const db = require('../db');
+const db = require('../db/pool');
 const { sendMail } = require('./emailService');
 
 const DEFAULT_SETTINGS = {

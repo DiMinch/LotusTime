@@ -1,4 +1,4 @@
-const db = require('../db');
+const db = require('../db/pool');
 const { DEFAULT_SETTINGS } = require('../services/notificationService');
 
 module.exports = {
