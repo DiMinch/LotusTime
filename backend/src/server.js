@@ -56,7 +56,16 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal Server Error', message: err.message });
 });
 
-// Start Server
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+const { runMigrations } = require('./db/migrate');
+
+// Start Server & Run Migrations
+runMigrations()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`Server is running on port ${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error('Database migrations failed. Server is shutting down.', err);
+    process.exit(1);
+  });

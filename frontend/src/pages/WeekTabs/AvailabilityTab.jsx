@@ -34,9 +34,11 @@ export default function AvailabilityTab({ weekId }) {
 
       if (weeks && weeks.length > 0) {
         const sorted = [...weeks].sort((x, y) => new Date(x.week_start) - new Date(y.week_start))
-        const currentIdx = sorted.findIndex(w => w.id === weekId)
+        const currentIdx = sorted.findIndex(w => String(w.id).toLowerCase() === String(weekId).toLowerCase())
         if (currentIdx > 0) {
           setPreviousWeekId(sorted[currentIdx - 1].id)
+        } else {
+          setPreviousWeekId(null)
         }
       }
     }).catch(console.error)

@@ -2,13 +2,14 @@ const fs = require('fs');
 const path = require('path');
 const { pool } = require('./pool');
 
-async function runMigrations() {
+async function runMigrations(customPool) {
+  const activePool = customPool || pool;
   console.log('Starting database migrations...');
   const migrationsDir = path.join(__dirname, 'migrations');
   
   try {
     // 1. Create schema_migrations table if not exists
-    await pool.query(`
+    await activePool.query(`
       CREATE TABLE IF NOT EXISTS schema_migrations (
         version VARCHAR(255) PRIMARY KEY,
         executed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -16,26 +17,26 @@ async function runMigrations() {
     `);
 
     // 2. Bootstrap existing database history if tables already exist
-    const { rows: personTableCheck } = await pool.query(`
+    const { rows: personTableCheck } = await activePool.query(`
       SELECT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'persons');
     `);
     if (personTableCheck[0].exists) {
-      await pool.query(`
+      await activePool.query(`
         INSERT INTO schema_migrations (version) VALUES ('001_init.sql') ON CONFLICT DO NOTHING;
       `);
     }
 
-    const { rows: segmentsColumnCheck } = await pool.query(`
+    const { rows: segmentsColumnCheck } = await activePool.query(`
       SELECT EXISTS (SELECT FROM information_schema.columns WHERE table_name='classes' AND column_name='segments');
     `);
     if (segmentsColumnCheck[0].exists) {
-      await pool.query(`
+      await activePool.query(`
         INSERT INTO schema_migrations (version) VALUES ('003_class_segments.sql') ON CONFLICT DO NOTHING;
       `);
     }
 
     // 3. Fetch executed migrations
-    const { rows: executedRows } = await pool.query('SELECT version FROM schema_migrations');
+    const { rows: executedRows } = await activePool.query('SELECT version FROM schema_migrations');
     const executedMigrations = new Set(executedRows.map(r => r.version));
 
     // 4. Scan migration files
@@ -53,7 +54,7 @@ async function runMigrations() {
       const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
       
       // Run each migration in a transaction
-      const client = await pool.connect();
+      const client = await activePool.connect();
       try {
         await client.query('BEGIN');
         await client.query(sql);
@@ -70,10 +71,20 @@ async function runMigrations() {
     console.log('All migrations checked and executed successfully.');
   } catch (err) {
     console.error('Error executing migrations:', err);
-    process.exit(1);
-  } finally {
-    await pool.end();
+    throw err;
   }
 }
 
-runMigrations();
+if (require.main === module) {
+  runMigrations()
+    .then(() => {
+      process.exit(0);
+    })
+    .catch((err) => {
+      console.error(err);
+      process.exit(1);
+    });
+}
+
+module.exports = { runMigrations };
+

@@ -63,17 +63,6 @@ export default function Sidebar({ isCollapsed, onToggle, onCloseMobile }) {
         {!isCollapsed && <p className="sidebar-tagline">Xếp lịch thông minh</p>}
       </div>
 
-      {/* User Info Quick View */}
-      {!isCollapsed && user && (
-        <div style={{ padding: 'var(--space-md) var(--space-lg)', borderBottom: '1px solid var(--color-hairline)', textAlign: 'left', marginBottom: 'var(--space-sm)' }}>
-          <div style={{ fontWeight: 'bold', color: 'var(--text-h)', fontSize: '14px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {user.username}
-          </div>
-          <div style={{ fontSize: '12px', color: 'var(--color-mute)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {user.role === 'admin' ? 'Quản trị viên' : 'Nhân viên'}
-          </div>
-        </div>
-      )}
 
       <nav className="sidebar-nav">
         {navItems.map(item => (
