@@ -8,7 +8,27 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Middleware
-app.use(cors({ exposedHeaders: ['Content-Disposition'] }));
+const allowedOrigins = [
+  'https://lotus-time.vercel.app',
+  'http://localhost:5173',
+  'http://localhost:5000'
+];
+if (process.env.FRONTEND_URL) {
+  allowedOrigins.push(process.env.FRONTEND_URL.replace(/\/$/, ''));
+}
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin) || allowedOrigins.includes(origin.replace(/\/$/, '')) || process.env.NODE_ENV !== 'production') {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  exposedHeaders: ['Content-Disposition']
+}));
 app.use(express.json({ limit: '10mb' }));
 
 // Routes

@@ -195,73 +195,75 @@ export default function UserManagementPage() {
           <p>Chưa có tài khoản nào được đăng ký.</p>
         </div>
       ) : (
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Tên đăng nhập</th>
-              <th>Email</th>
-              <th>Vai trò</th>
-              <th>Liên kết nhân sự</th>
-              <th>Ngày tạo</th>
-              <th>Trạng thái</th>
-              <th>Thao tác</th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map(u => (
-              <tr key={u.id}>
-                <td style={{ fontWeight: 700 }}>{u.username}</td>
-                <td>{u.email}</td>
-                <td>
-                  <span className={`chip ${u.role === 'admin' ? 'chip-green' : 'chip-gray'}`} style={{ margin: 0 }}>
-                    {u.role === 'admin' ? 'Admin' : 'Nhân viên'}
-                  </span>
-                </td>
-                <td>
-                  {u.person_short_name ? (
-                    <span style={{ color: 'var(--text-h)' }}>
-                      {u.person_full_name} ({u.person_short_name})
-                    </span>
-                  ) : (
-                    <span style={{ color: 'var(--color-mute)' }}>—</span>
-                  )}
-                </td>
-                <td>{formatDate(u.created_at)}</td>
-                <td>
-                  <span className={`chip ${u.is_active ? 'chip-green' : 'chip-red'}`} style={{ margin: 0, opacity: u.is_active ? 1 : 0.6 }}>
-                    {u.is_active ? 'Hoạt động' : 'Tạm khóa'}
-                  </span>
-                </td>
-                <td>
-                  <div style={{ display: 'flex', gap: 4 }}>
-                    <button className="btn-icon" title="Sửa tài khoản" onClick={() => openEdit(u)}>
-                      <PencilSimple size={18} weight="light" />
-                    </button>
-                    <button className="btn-icon" title="Đặt lại mật khẩu" onClick={() => openResetPassword(u)}>
-                      <Key size={18} weight="light" />
-                    </button>
-                    <button 
-                      className="btn-icon" 
-                      title={u.is_active ? 'Khóa tài khoản' : 'Kích hoạt tài khoản'} 
-                      onClick={() => handleToggleStatus(u)}
-                      style={{ color: u.is_active ? 'var(--color-warning)' : 'var(--color-success-deep)' }}
-                    >
-                      {u.is_active ? <Prohibit size={18} weight="light" /> : <Check size={18} weight="bold" />}
-                    </button>
-                    <button 
-                      className="btn-icon" 
-                      title="Xóa tài khoản" 
-                      onClick={() => handleDelete(u)}
-                      style={{ color: 'var(--color-error)' }}
-                    >
-                      <Trash size={18} weight="light" />
-                    </button>
-                  </div>
-                </td>
+        <div className="data-table-wrapper">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Tên đăng nhập</th>
+                <th>Email</th>
+                <th>Vai trò</th>
+                <th>Liên kết nhân sự</th>
+                <th>Ngày tạo</th>
+                <th>Trạng thái</th>
+                <th>Thao tác</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {users.map(u => (
+                <tr key={u.id}>
+                  <td style={{ fontWeight: 700 }}>{u.username}</td>
+                  <td>{u.email}</td>
+                  <td>
+                    <span className={`chip ${u.role === 'admin' ? 'chip-green' : 'chip-gray'}`} style={{ margin: 0 }}>
+                      {u.role === 'admin' ? 'Admin' : 'Nhân viên'}
+                    </span>
+                  </td>
+                  <td>
+                    {u.person_short_name ? (
+                      <span style={{ color: 'var(--text-h)' }}>
+                        {u.person_full_name} ({u.person_short_name})
+                      </span>
+                    ) : (
+                      <span style={{ color: 'var(--color-mute)' }}>—</span>
+                    )}
+                  </td>
+                  <td>{formatDate(u.created_at)}</td>
+                  <td>
+                    <span className={`chip ${u.is_active ? 'chip-green' : 'chip-red'}`} style={{ margin: 0, opacity: u.is_active ? 1 : 0.6 }}>
+                      {u.is_active ? 'Hoạt động' : 'Tạm khóa'}
+                    </span>
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <button className="btn-icon" title="Sửa tài khoản" onClick={() => openEdit(u)}>
+                        <PencilSimple size={18} weight="light" />
+                      </button>
+                      <button className="btn-icon" title="Đặt lại mật khẩu" onClick={() => openResetPassword(u)}>
+                        <Key size={18} weight="light" />
+                      </button>
+                      <button 
+                        className="btn-icon" 
+                        title={u.is_active ? 'Khóa tài khoản' : 'Kích hoạt tài khoản'} 
+                        onClick={() => handleToggleStatus(u)}
+                        style={{ color: u.is_active ? 'var(--color-warning)' : 'var(--color-success-deep)' }}
+                      >
+                        {u.is_active ? <Prohibit size={18} weight="light" /> : <Check size={18} weight="bold" />}
+                      </button>
+                      <button 
+                        className="btn-icon" 
+                        title="Xóa tài khoản" 
+                        onClick={() => handleDelete(u)}
+                        style={{ color: 'var(--color-error)' }}
+                      >
+                        <Trash size={18} weight="light" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {/* Create / Edit Modal */}

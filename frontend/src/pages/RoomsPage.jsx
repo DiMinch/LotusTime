@@ -58,23 +58,25 @@ export default function RoomsPage() {
       {rooms.length === 0 ? (
         <div className="empty-state"><Door size={64} weight="light" /><p>Chưa có phòng học nào.</p></div>
       ) : (
-        <table className="data-table">
-          <thead><tr><th>Tên phòng</th><th>Sức chứa</th><th></th></tr></thead>
-          <tbody>
-            {rooms.map(r => (
-              <tr key={r.id}>
-                <td style={{ fontWeight: 700 }}>{r.name}</td>
-                <td>{r.capacity || '—'}</td>
-                <td>
-                  <div style={{ display: 'flex', gap: 4 }}>
-                    <button className="btn-icon" onClick={() => openEdit(r)}><PencilSimple size={18} weight="light" /></button>
-                    <button className="btn-icon" onClick={() => handleDelete(r.id)}><Trash size={18} weight="light" /></button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="data-table-wrapper">
+          <table className="data-table">
+            <thead><tr><th>Tên phòng</th><th>Sức chứa</th><th></th></tr></thead>
+            <tbody>
+              {rooms.map(r => (
+                <tr key={r.id}>
+                  <td style={{ fontWeight: 700 }}>{r.name}</td>
+                  <td>{r.capacity || '—'}</td>
+                  <td>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <button className="btn-icon" onClick={() => openEdit(r)}><PencilSimple size={18} weight="light" /></button>
+                      <button className="btn-icon" onClick={() => handleDelete(r.id)}><Trash size={18} weight="light" /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {showModal && (

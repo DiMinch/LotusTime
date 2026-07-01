@@ -380,56 +380,58 @@ export default function ClassesPage() {
           <p>Chưa có lớp nào. Thêm lớp đầu tiên.</p>
         </div>
       ) : (
-        <table className="data-table">
-          <thead>
-            <tr><th>Mã lớp</th><th>Loại</th><th>Trình độ</th><th>HS</th><th>Buổi/tuần</th><th>Thời lượng</th><th>Cấu trúc</th><th></th></tr>
-          </thead>
-          <tbody>
-            {classes.map(c => (
-              <tr key={c.id}>
-                <td style={{ fontWeight: 700 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    {c.code}
-                    {c.permissions && c.permissions.length > 0 && (
-                      <LockKey size={14} weight="fill" color="var(--color-warning)" title={`Chỉ định ${c.permissions.length} GV/TA`} />
-                    )}
-                  </div>
-                </td>
-                <td><span className={`chip ${TYPE_CHIP[c.class_type] || 'chip-gray'}`}>
-                  {CLASS_TYPES.find(t => t.value === c.class_type)?.label || c.class_type}
-                </span></td>
-                <td>{c.level || '—'}</td>
-                <td>{c.student_count || '—'}</td>
-                <td>{c.sessions_per_week}</td>
-                <td>{getClassDurationString(c)}</td>
-                <td>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    {hasSegments(c)
-                      ? (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                            <span className="chip chip-pink" style={{ fontSize: '10px' }}>{getSegmentsCount(c)} phân đoạn</span>
-                            {needsTA(c) && (
-                              <span className="chip chip-pink" style={{ fontSize: '10px' }}>Cần TA</span>
-                            )}
-                          </div>
-                        )
-                      : <span className="chip chip-gray">Đơn giản</span>
-                    }
-                    {c.allow_same_day && (
-                      <span className="chip chip-green" style={{ fontSize: '10px' }}>Học cùng ngày</span>
-                    )}
-                  </div>
-                </td>
-                <td>
-                  <div style={{ display: 'flex', gap: 4 }}>
-                    <button className="btn-icon" onClick={() => openEdit(c)}><PencilSimple size={18} weight="light" /></button>
-                    <button className="btn-icon" onClick={() => handleDelete(c.id)}><Trash size={18} weight="light" /></button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="data-table-wrapper">
+          <table className="data-table">
+            <thead>
+              <tr><th>Mã lớp</th><th>Loại</th><th>Trình độ</th><th>HS</th><th>Buổi/tuần</th><th>Thời lượng</th><th>Cấu trúc</th><th></th></tr>
+            </thead>
+            <tbody>
+              {classes.map(c => (
+                <tr key={c.id}>
+                  <td style={{ fontWeight: 700 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      {c.code}
+                      {c.permissions && c.permissions.length > 0 && (
+                        <LockKey size={14} weight="fill" color="var(--color-warning)" title={`Chỉ định ${c.permissions.length} GV/TA`} />
+                      )}
+                    </div>
+                  </td>
+                  <td><span className={`chip ${TYPE_CHIP[c.class_type] || 'chip-gray'}`}>
+                    {CLASS_TYPES.find(t => t.value === c.class_type)?.label || c.class_type}
+                  </span></td>
+                  <td>{c.level || '—'}</td>
+                  <td>{c.student_count || '—'}</td>
+                  <td>{c.sessions_per_week}</td>
+                  <td>{getClassDurationString(c)}</td>
+                  <td>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {hasSegments(c)
+                        ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                              <span className="chip chip-pink" style={{ fontSize: '10px' }}>{getSegmentsCount(c)} phân đoạn</span>
+                              {needsTA(c) && (
+                                <span className="chip chip-pink" style={{ fontSize: '10px' }}>Cần TA</span>
+                              )}
+                            </div>
+                          )
+                        : <span className="chip chip-gray">Đơn giản</span>
+                      }
+                      {c.allow_same_day && (
+                        <span className="chip chip-green" style={{ fontSize: '10px' }}>Học cùng ngày</span>
+                      )}
+                    </div>
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <button className="btn-icon" onClick={() => openEdit(c)}><PencilSimple size={18} weight="light" /></button>
+                      <button className="btn-icon" onClick={() => handleDelete(c.id)}><Trash size={18} weight="light" /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {showModal && (

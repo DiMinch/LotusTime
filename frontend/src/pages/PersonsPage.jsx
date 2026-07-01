@@ -166,41 +166,43 @@ export default function PersonsPage() {
       {persons.length === 0 ? (
         <div className="empty-state"><UsersIcon size={64} weight="light" /><p>Chưa có giáo viên nào. Hãy thêm người đầu tiên.</p></div>
       ) : (
-        <table className="data-table">
-          <thead><tr><th>Tên ngắn</th><th>Họ tên</th><th>Năng lực</th><th>Liên hệ & Tài khoản</th><th></th></tr></thead>
-          <tbody>
-            {persons.map(p => (
-              <tr key={p.id}>
-                <td style={{ fontWeight: 700 }}>{p.short_name}</td>
-                <td>{p.full_name}</td>
-                <td>
-                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                    {(p.capabilities || []).map(c => (
-                      <span key={c} className={`chip ${c.startsWith('ta') ? 'chip-pink' : 'chip-green'}`} data-tooltip={CAP_TOOLTIPS[c]}>{CAP_LABELS[c] || c}</span>
-                    ))}
-                  </div>
-                </td>
-                <td style={{ color: 'var(--color-mute)' }}>
-                  <div>{p.phone || p.email || '—'}</div>
-                  {p.username && (
-                    <div style={{ fontSize: '12px', marginTop: '4px', color: 'var(--color-primary)' }}>
-                      Tài khoản: <code style={{ background: 'var(--color-surface-soft)', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>{p.username}</code>
+        <div className="data-table-wrapper">
+          <table className="data-table">
+            <thead><tr><th>Tên ngắn</th><th>Họ tên</th><th>Năng lực</th><th>Liên hệ & Tài khoản</th><th></th></tr></thead>
+            <tbody>
+              {persons.map(p => (
+                <tr key={p.id}>
+                  <td style={{ fontWeight: 700 }}>{p.short_name}</td>
+                  <td>{p.full_name}</td>
+                  <td>
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                      {(p.capabilities || []).map(c => (
+                        <span key={c} className={`chip ${c.startsWith('ta') ? 'chip-pink' : 'chip-green'}`} data-tooltip={CAP_TOOLTIPS[c]}>{CAP_LABELS[c] || c}</span>
+                      ))}
                     </div>
-                  )}
-                </td>
-                <td>
-                  <div style={{ display: 'flex', gap: 4 }}>
+                  </td>
+                  <td style={{ color: 'var(--color-mute)' }}>
+                    <div>{p.phone || p.email || '—'}</div>
                     {p.username && (
-                      <button className="btn-icon" onClick={() => handleResetPassword(p)} title="Cấp lại mật khẩu"><Key size={18} weight="light" /></button>
+                      <div style={{ fontSize: '12px', marginTop: '4px', color: 'var(--color-primary)' }}>
+                        Tài khoản: <code style={{ background: 'var(--color-surface-soft)', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>{p.username}</code>
+                      </div>
                     )}
-                    <button className="btn-icon" onClick={() => openEdit(p)}><PencilSimple size={18} weight="light" /></button>
-                    <button className="btn-icon" onClick={() => handleDelete(p.id)}><Trash size={18} weight="light" /></button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      {p.username && (
+                        <button className="btn-icon" onClick={() => handleResetPassword(p)} title="Cấp lại mật khẩu"><Key size={18} weight="light" /></button>
+                      )}
+                      <button className="btn-icon" onClick={() => openEdit(p)}><PencilSimple size={18} weight="light" /></button>
+                      <button className="btn-icon" onClick={() => handleDelete(p.id)}><Trash size={18} weight="light" /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {showModal && (

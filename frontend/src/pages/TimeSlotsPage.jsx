@@ -69,24 +69,26 @@ export default function TimeSlotsPage() {
         grouped.filter(g => g.slots.length > 0).map(g => (
           <div key={g.value} style={{ marginBottom: 'var(--space-xl)' }}>
             <h3 style={{ fontSize: 'var(--text-heading-sm-size)', fontWeight: 700, marginBottom: 'var(--space-sm)' }}>{g.label}</h3>
-            <table className="data-table">
-              <thead><tr><th>Nhãn</th><th>Bắt đầu</th><th>Kết thúc</th><th></th></tr></thead>
-              <tbody>
-                {g.slots.map(s => (
-                  <tr key={s.id}>
-                    <td style={{ fontWeight: 700 }}>{s.label}</td>
-                    <td>{s.start_time?.slice(0, 5)}</td>
-                    <td>{s.end_time?.slice(0, 5)}</td>
-                    <td>
-                      <div style={{ display: 'flex', gap: 4 }}>
-                        <button className="btn-icon" onClick={() => openEdit(s)}><PencilSimple size={18} weight="light" /></button>
-                        <button className="btn-icon" onClick={() => handleDelete(s.id)}><Trash size={18} weight="light" /></button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="data-table-wrapper">
+              <table className="data-table">
+                <thead><tr><th>Nhãn</th><th>Bắt đầu</th><th>Kết thúc</th><th></th></tr></thead>
+                <tbody>
+                  {g.slots.map(s => (
+                    <tr key={s.id}>
+                      <td style={{ fontWeight: 700 }}>{s.label}</td>
+                      <td>{s.start_time?.slice(0, 5)}</td>
+                      <td>{s.end_time?.slice(0, 5)}</td>
+                      <td>
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          <button className="btn-icon" onClick={() => openEdit(s)}><PencilSimple size={18} weight="light" /></button>
+                          <button className="btn-icon" onClick={() => handleDelete(s.id)}><Trash size={18} weight="light" /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         ))
       )}

@@ -63,6 +63,7 @@ async function request(url, options = {}) {
   let res = await fetch(`${BASE}${url}`, {
     ...options,
     headers,
+    credentials: 'include',
     body: options.body ? JSON.stringify(options.body) : undefined,
   });
 
@@ -71,7 +72,8 @@ async function request(url, options = {}) {
     try {
       const refreshRes = await fetch(`${BASE}/auth/refresh`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include'
       });
       if (refreshRes.ok) {
         const data = await refreshRes.json();
@@ -82,6 +84,7 @@ async function request(url, options = {}) {
         res = await fetch(`${BASE}${url}`, {
           ...options,
           headers,
+          credentials: 'include',
           body: options.body ? JSON.stringify(options.body) : undefined,
         });
       } else {

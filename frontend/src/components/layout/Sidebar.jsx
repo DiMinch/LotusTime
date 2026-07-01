@@ -7,7 +7,7 @@ import {
 } from '@phosphor-icons/react';
 import './Sidebar.css';
 
-export default function Sidebar({ isCollapsed, onToggle }) {
+export default function Sidebar({ isCollapsed, onToggle, onCloseMobile }) {
   const { user, isAdmin, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -38,7 +38,15 @@ export default function Sidebar({ isCollapsed, onToggle }) {
   const navItems = isAdmin ? adminNavItems : staffNavItems;
 
   return (
-    <aside className={`sidebar ${isCollapsed ? 'collapsed' : ''}`}>
+    <aside 
+      className={`sidebar ${isCollapsed ? 'collapsed' : ''}`}
+      onClick={(e) => {
+        if (e.target.closest('a') || e.target.closest('button')) {
+          if (e.target.closest('.sidebar-toggle-btn')) return;
+          if (onCloseMobile) onCloseMobile();
+        }
+      }}
+    >
       <div className="sidebar-brand">
         {!isCollapsed && (
           <div className="sidebar-logo">

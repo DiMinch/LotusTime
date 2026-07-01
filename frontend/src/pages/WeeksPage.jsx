@@ -43,19 +43,21 @@ export default function WeeksPage() {
       {weeks.length === 0 ? (
         <div className="empty-state"><CalendarPlus size={64} weight="light" /><p>Chưa có tuần nào. Tạo tuần đầu tiên.</p></div>
       ) : (
-        <table className="data-table">
-          <thead><tr><th>Tuần bắt đầu</th><th>Trạng thái</th><th>Ngày tạo</th><th>Ngày xuất bản</th></tr></thead>
-          <tbody>
-            {weeks.map(w => (
-              <tr key={w.id} onClick={() => navigate(`/weeks/${w.id}`)} style={{ cursor: 'pointer' }}>
-                <td style={{ fontWeight: 700 }}>{new Date(w.week_start).toLocaleDateString('vi-VN')}</td>
-                <td><span className={`chip ${STATUS_MAP[w.status]?.cls || 'chip-gray'}`}>{STATUS_MAP[w.status]?.label || w.status}</span></td>
-                <td style={{ color: 'var(--color-mute)' }}>{new Date(w.created_at).toLocaleDateString('vi-VN')}</td>
-                <td style={{ color: 'var(--color-mute)' }}>{w.published_at ? new Date(w.published_at).toLocaleDateString('vi-VN') : '—'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="data-table-wrapper">
+          <table className="data-table">
+            <thead><tr><th>Tuần bắt đầu</th><th>Trạng thái</th><th>Ngày tạo</th><th>Ngày xuất bản</th></tr></thead>
+            <tbody>
+              {weeks.map(w => (
+                <tr key={w.id} onClick={() => navigate(`/weeks/${w.id}`)} style={{ cursor: 'pointer' }}>
+                  <td style={{ fontWeight: 700 }}>{new Date(w.week_start).toLocaleDateString('vi-VN')}</td>
+                  <td><span className={`chip ${STATUS_MAP[w.status]?.cls || 'chip-gray'}`}>{STATUS_MAP[w.status]?.label || w.status}</span></td>
+                  <td style={{ color: 'var(--color-mute)' }}>{new Date(w.created_at).toLocaleDateString('vi-VN')}</td>
+                  <td style={{ color: 'var(--color-mute)' }}>{w.published_at ? new Date(w.published_at).toLocaleDateString('vi-VN') : '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {showModal && (
