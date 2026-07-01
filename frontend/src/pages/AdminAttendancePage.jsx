@@ -6,6 +6,7 @@ import {
   QrCode, Clock, Check, X, Coins, MapPin, 
   Plus, PencilSimple, Trash, Calendar, Info, Warning, ArrowRight, User
 } from '@phosphor-icons/react';
+import MapPicker from '../components/common/MapPicker';
 import './AdminAttendancePage.css';
 
 export default function AdminAttendancePage() {
@@ -655,6 +656,14 @@ export default function AdminAttendancePage() {
                     />
                   </div>
                 </div>
+
+                {/* Leaflet interactive Map Picker */}
+                <MapPicker 
+                  latitude={branchFormData.latitude} 
+                  longitude={branchFormData.longitude} 
+                  radius={branchFormData.allowed_radius_meters}
+                  onChange={(lat, lng) => setBranchFormData({ ...branchFormData, latitude: lat, longitude: lng })}
+                />
 
                 <h4 style={{ margin: 'var(--space-md) 0 var(--space-xs)' }}>Biểu giá lương trợ giảng (VNĐ / Giờ):</h4>
                 <div className="form-grid rates-grid">
